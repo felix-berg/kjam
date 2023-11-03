@@ -166,7 +166,7 @@ function make_body(x, y, vx, vy, mass, radius)
     return sb
 end
 
-local gravity_constant = 6.5
+local gravity_constant = 1
 function attraction_force(p1, m1, p2, m2)
     local dist_sq = (p1 - p2):sizesq()
     local force = gravity_constant * (m1 * m2 / dist_sq)
@@ -189,27 +189,40 @@ function map(val, old_min, old_max, min, max)
     return lerp(t, min, max)
 end
 
-local wbl = makevec2d(-1, -1)
-local wsz = makevec2d(2, 2)
+local world = {
+    bl = makevec2d(-1, -1),
+    size = makevec2d(2, 2)
+}
+
 function screen_space(pos)
     return makevec2d(
-        map(pos.x, wbl.x, wbl.x + wsz.x, 0, screen.width),
-        map(pos.y, wbl.y + wsz.y, wbl.y, 0, screen.height)
+        map(pos.x, world.bl.x, world.bl.x + world.size.x, 0, screen.width),
+        map(pos.y, world.bl.y + world.size.y, world.bl.y, 0, screen.height)
     )
 end
 
 function screen_space_scale(val)
-    return map(val, 0, wsz.x, 0, screen.width)
+    return map(val, 0, world.size.x, 0, screen.width)
 end
 
 local static_bodies = {}
 local bodies = {}
+local projectiles = {}
 
-bodies[1] = make_body(0.97, -0.243, 0.932, 0.864, 1, 0.04)
-bodies[2] = make_body(-0.97, 0.243,  0.932, 0.864, 1, 0.04)
-bodies[3] = make_body(0, 0,          -0.932 * 2, -0.864 * 2, 1, 0.04)
+bodies[1] = make_body(-0.5, -0.5, -1, 1, 0.5, 0.048)
+static_bodies[1] = make_body(0, 0, 0, 0, 2, 0.1)
 
-local dt = 1 / 60
+function get_control_direction()
+    local v = makevec2d(0, 0)
+    if btn(controls.left) then v.x = -1 end
+    if btn(controls.right) then v.x += 1 end
+    if btn(controls.down) then v.y = -1 end
+    if btn(controls.up) then v.y += 1 end
+    if v.x == 0 and v.y == 0 then return v end
+    return v:unit()
+end
+
+local dt = 1 / 200
 function _update60()
     for b, body in ipairs(bodies) do
         for o, other in ipairs(bodies) do
@@ -221,16 +234,37 @@ function _update60()
         end
 
         for o, other in ipairs(static_bodies) do
-            if b != o then 
-                local v = other:attract(body.pos, body.mass)
-                body.vel += (v / body.mass) * dt
-                body.pos += body.vel * dt
-            end
+            local v = other:attract(body.pos, body.mass)
+            body.vel += (v / body.mass) * dt
+            body.pos += body.vel * dt
         end
     end
 
-    if btn(controls.x) then
-        
+    local control_dir = get_control_direction()
+
+    if btnp(controls.x) then
+        if control_dir.x != 0 or control_dir.y != 0 then
+            bodies[1].vel -= control_dir
+            projectiles[#projectiles + 1] = make_body(
+                bodies[1].pos.x, bodies[1].pos.y, 
+                control_dir.x * 0.01, control_dir.y * 0.01, 
+                0, 0.001
+            )
+        end
+    end
+
+    for i, proj in ipairs(projectiles) do
+        proj.pos += proj.vel
+        if proj.pos.x < world.bl.x then 
+            deli(projectiles, i)
+        end
+        if proj.pos.x > world.bl.x + world.size.x then
+            deli(projectiles, i)
+        end
+    end
+
+    printh(#projectiles)
+
 end
 
 function _draw() 
@@ -246,12 +280,19 @@ function _draw()
         local r = screen_space_scale(v.radius)
         circfill(s.x, s.y, r)
     end
+
+    for _, p in ipairs(projectiles) do
+        local s = screen_space(p.pos)
+        local r = screen_space_scale(p.radius)
+        circfill(s.x, s.y, r)
+    end
 end
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000c70000000000000066000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0070070000cbcc000000000000488800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000770000cbbccc00006600004888440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000770000ccccbc000aa600008884480000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0070070000ccbb0000aa000000484800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000770000a00000000067000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
