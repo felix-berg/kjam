@@ -1,0 +1,257 @@
+pico-8 cartridge // http://www.pico-8.com
+version 41
+__lua__
+
+local vecmt = {}
+vecmt.__index = vecmt;
+
+function makevec2d(x, y)
+    local v = {
+        x = x,
+        y = y
+    }
+
+    setmetatable(v, vecmt)
+    return v 
+end
+
+function vecmt.__add(self, other)
+    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
+        assert(false, "Invalid vecmt add")
+    end
+
+    return makevec2d(
+        self.x + other.x, 
+        self.y + other.y
+    )
+end
+
+function vecmt.__sub(self, other)
+    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
+        assert(false, "Invalid vecmt sub")
+    end
+
+    return makevec2d(
+        self.x - other.x,
+        self.y - other.y
+    )
+end
+
+function vecmt.__mul(a, b)
+    if type(a) == "number" then
+        return makevec2d(
+            b.x * a,
+            b.y * a
+        )
+    elseif type(b) == "number" then
+        return makevec2d(
+            a.x * b,
+            a.y * b
+        )
+    else
+        assert(false, "Can only multiply vector by a number")
+    end
+end
+
+function vecmt.__div(a, b)
+    if type(a) == "number" then
+        return makevec2d(
+            b.x / a,
+            b.y / a
+        )
+    elseif type(b) == "number" then
+        return makevec2d(
+            a.x / b,
+            a.y / b
+        )
+    else
+        assert(false, "Can only divide vector by a number")
+    end
+end
+
+function vecmt:addv(other)
+    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
+        assert(false, "Invalid vecmt add")
+    end
+
+    self.x += other.x
+    self.y += other.y
+end
+
+function vecmt:subv(other)
+    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
+        assert(false, "Invalid vecmt sub")
+    end
+    
+    self.x -= other.x
+    self.y -= other.y
+end
+
+function vecmt:mul(scalar)
+    if type(scalar) ~= "number" then
+        assert(false, "vecmt:mul error: can only multiply by a number")
+    end
+
+    self.x *= scalar
+    self.y *= scalar
+end
+
+function vecmt:div(scalar)
+    if type(scalar) ~= "number" then
+        assert(false, "vecmt:mul error: can only multiply by a number")
+    end
+
+    self.x /= scalar
+    self.y /= scalar
+end
+
+function vecmt:__tostring()
+    return self.x .. ", " .. self.y
+end
+
+function vecmt:sizesq()
+    return self.x * self.x + self.y * self.y
+end
+
+function vecmt:size()
+    return sqrt(self:sizesq())
+end
+
+function vecmt:unit()
+    return self / self:size()
+end
+
+function vecmt:set_size(s)
+    self:mul(s / self:size())
+end
+
+function vecmt:normalize()
+    self:div(self:size())
+end
+
+function vecmt:limit(l)
+    assert(type(l) == "number")
+
+    if self:size() > l then 
+        self:set_size(l)
+    end
+end
+
+local screen = {
+    width = 128,
+    height = 128
+}
+
+local controls = {
+    left = ⬅️,
+    right = ➡️,
+    up = ⬆️,
+    down = ⬇️,
+    x = ❎,
+    o = 🅾️
+}
+
+local bodymt = {}
+bodymt.__index = bodymt;
+
+function make_body(x, y, vx, vy, mass, radius)
+    local sb = {
+        pos = makevec2d(x, y),
+        vel = makevec2d(vx, vy),
+        mass = mass,
+        radius = radius 
+    }
+
+    setmetatable(sb, bodymt)
+    return sb
+end
+
+local gravity_constant = 6.5
+function attraction_force(p1, m1, p2, m2)
+    local dist_sq = (p1 - p2):sizesq()
+    local force = gravity_constant * (m1 * m2 / dist_sq)
+    return force
+end
+
+function bodymt:attract(pos, mass)
+    local f = attraction_force(pos, mass, self.pos, self.mass)
+    local d = self.pos - pos
+    d:set_size(f)
+    return d
+end
+
+function lerp(t, min, max)
+    return t * (max - min) + min
+end
+
+function map(val, old_min, old_max, min, max)
+    local t = ((val - old_min) / (old_max - old_min))
+    return lerp(t, min, max)
+end
+
+local wbl = makevec2d(-1, -1)
+local wsz = makevec2d(2, 2)
+function screen_space(pos)
+    return makevec2d(
+        map(pos.x, wbl.x, wbl.x + wsz.x, 0, screen.width),
+        map(pos.y, wbl.y + wsz.y, wbl.y, 0, screen.height)
+    )
+end
+
+function screen_space_scale(val)
+    return map(val, 0, wsz.x, 0, screen.width)
+end
+
+local static_bodies = {}
+local bodies = {}
+
+bodies[1] = make_body(0.97, -0.243, 0.932, 0.864, 1, 0.04)
+bodies[2] = make_body(-0.97, 0.243,  0.932, 0.864, 1, 0.04)
+bodies[3] = make_body(0, 0,          -0.932 * 2, -0.864 * 2, 1, 0.04)
+
+local dt = 1 / 60
+function _update60()
+    for b, body in ipairs(bodies) do
+        for o, other in ipairs(bodies) do
+            if b != o then 
+                local v = other:attract(body.pos, body.mass)
+                body.vel += (v / body.mass) * dt
+                body.pos += body.vel * dt
+            end
+        end
+
+        for o, other in ipairs(static_bodies) do
+            if b != o then 
+                local v = other:attract(body.pos, body.mass)
+                body.vel += (v / body.mass) * dt
+                body.pos += body.vel * dt
+            end
+        end
+    end
+
+    if btn(controls.x) then
+        
+end
+
+function _draw() 
+    cls()
+    for _, v in ipairs(static_bodies) do
+        local s = screen_space(v.pos)
+        local r = screen_space_scale(v.radius)
+        circfill(s.x, s.y, r)
+    end
+
+    for _, v in ipairs(bodies) do
+        local s = screen_space(v.pos)
+        local r = screen_space_scale(v.radius)
+        circfill(s.x, s.y, r)
+    end
+end
+
+__gfx__
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
