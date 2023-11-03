@@ -10,16 +10,11 @@ function makevec2d(x, y)
         x = x,
         y = y
     }
-
     setmetatable(v, vecmt)
     return v 
 end
 
 function vecmt.__add(self, other)
-    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
-        assert(false, "Invalid vecmt add")
-    end
-
     return makevec2d(
         self.x + other.x, 
         self.y + other.y
@@ -27,10 +22,6 @@ function vecmt.__add(self, other)
 end
 
 function vecmt.__sub(self, other)
-    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
-        assert(false, "Invalid vecmt sub")
-    end
-
     return makevec2d(
         self.x - other.x,
         self.y - other.y
@@ -43,13 +34,11 @@ function vecmt.__mul(a, b)
             b.x * a,
             b.y * a
         )
-    elseif type(b) == "number" then
+    else
         return makevec2d(
             a.x * b,
             a.y * b
         )
-    else
-        assert(false, "Can only multiply vector by a number")
     end
 end
 
@@ -59,48 +48,35 @@ function vecmt.__div(a, b)
             b.x / a,
             b.y / a
         )
-    elseif type(b) == "number" then
+    else
         return makevec2d(
             a.x / b,
             a.y / b
         )
-    else
-        assert(false, "Can only divide vector by a number")
     end
 end
 
-function vecmt:addv(other)
-    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
-        assert(false, "Invalid vecmt add")
-    end
+function vecmt:set(x, y)
+    self.x = x
+    self.y = y
+end
 
+function vecmt:addv(other)
     self.x += other.x
     self.y += other.y
 end
 
 function vecmt:subv(other)
-    if type(other) ~= "table" or getmetatable(other) ~= vecmt then
-        assert(false, "Invalid vecmt sub")
-    end
-    
     self.x -= other.x
     self.y -= other.y
 end
 
 function vecmt:mul(scalar)
-    if type(scalar) ~= "number" then
-        assert(false, "vecmt:mul error: can only multiply by a number")
-    end
-
     self.x *= scalar
     self.y *= scalar
 end
 
 function vecmt:div(scalar)
-    if type(scalar) ~= "number" then
-        assert(false, "vecmt:mul error: can only multiply by a number")
-    end
-
     self.x /= scalar
     self.y /= scalar
 end
@@ -154,14 +130,15 @@ local controls = {
 local bodymt = {}
 bodymt.__index = bodymt;
 
-function make_body(x, y, vx, vy, mass, radius)
+function make_body(pos, vel, acc, mass, radius)
     local sb = {
-        pos = makevec2d(x, y),
-        vel = makevec2d(vx, vy),
+        pos = pos, 
+        vel = vel,
+        acc = makevec2d(0, 0),
         mass = mass,
         radius = radius 
     }
-
+    
     setmetatable(sb, bodymt)
     return sb
 end
@@ -173,11 +150,21 @@ function attraction_force(p1, m1, p2, m2)
     return force
 end
 
-function bodymt:attract(pos, mass)
-    local f = attraction_force(pos, mass, self.pos, self.mass)
-    local d = self.pos - pos
+function bodymt:add_force(force)
+    self.acc += force / self.mass
+end
+
+function bodymt:attract_to(body)
+    local f = attraction_force(self.pos, self.mass, body.pos, body.mass)
+    local d = body.pos - self.pos
     d:set_size(f)
-    return d
+    self:add_force(d)
+end
+
+function bodymt:update(dt)
+    self.vel += self.acc * dt
+    self.pos += self.vel * dt
+    self.acc:set(0, 0)
 end
 
 function lerp(t, min, max)
@@ -209,10 +196,17 @@ local static_bodies = {}
 local bodies = {}
 local projectiles = {}
 
-bodies[1] = make_body(-0.5, -0.5, -1, 1, 0.5, 0.048)
-static_bodies[1] = make_body(0, 0, 0, 0, 2, 0.1)
+bodies[1] = make_body(
+    makevec2d(-0.5, -0.5), 
+    makevec2d(-1, 1), 
+    0.5, 0.048)
 
-function get_control_direction()
+static_bodies[1] = make_body(
+    makevec2d(0, 0), 
+    makevec2d(0, 0),
+    2, 0.1)
+
+function gamepad_dir()
     local v = makevec2d(0, 0)
     if btn(controls.left) then v.x = -1 end
     if btn(controls.right) then v.x += 1 end
@@ -227,28 +221,24 @@ function _update60()
     for b, body in ipairs(bodies) do
         for o, other in ipairs(bodies) do
             if b != o then 
-                local v = other:attract(body.pos, body.mass)
-                body.vel += (v / body.mass) * dt
-                body.pos += body.vel * dt
+                body:attract_to(other)
             end
         end
 
         for o, other in ipairs(static_bodies) do
-            local v = other:attract(body.pos, body.mass)
-            body.vel += (v / body.mass) * dt
-            body.pos += body.vel * dt
+            body:attract_to(other)
         end
+
+        body:update(dt)
     end
 
-    local control_dir = get_control_direction()
+    local control_dir = gamepad_dir()
 
     if btnp(controls.x) then
         if control_dir.x != 0 or control_dir.y != 0 then
-            bodies[1].vel -= control_dir
+            bodies:add_force(control_dir)
             projectiles[#projectiles + 1] = make_body(
-                bodies[1].pos.x, bodies[1].pos.y, 
-                control_dir.x * 0.01, control_dir.y * 0.01, 
-                0, 0.001
+                bodies[1].pos, control_dir * 0.01, 0, 0.001
             )
         end
     end
@@ -274,7 +264,7 @@ function _draw()
         local r = screen_space_scale(v.radius)
         circfill(s.x, s.y, r)
     end
-
+    
     for _, v in ipairs(bodies) do
         local s = screen_space(v.pos)
         local r = screen_space_scale(v.radius)
