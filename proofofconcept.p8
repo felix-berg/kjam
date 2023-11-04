@@ -147,7 +147,8 @@ end
 local player_mass = 4
 local player_radius = 0.32
 function add_player(pos, vel, playeridx)
-    local body = make_body(pos, vel, player_mass, player_radius, PLANET, DYNAMIC)
+    local body = make_body(pos, vel, player_mass, player_radius, PLANET, DYNAMIC,
+        make_planet_draw_state())
     add(players, {
         body = body,
         index = playeridx,
@@ -156,6 +157,14 @@ function add_player(pos, vel, playeridx)
         alive = true
     })
     add(bodies, body)
+end
+
+function add_sun(pos, mass, radius)
+    add(bodies, make_body(
+        makevec2d(0, 0), 
+        makevec2d(0, 0),
+        mass, radius, SUN, STATIC,
+        make_sun_draw_state()))
 end
 
 function x_just_pressed(player)
@@ -207,10 +216,8 @@ add_player(
     1
 )
 
-add(bodies, make_body(
-    makevec2d(0, 0), 
-    makevec2d(0, 0),
-    16, 0.8, SUN, STATIC))
+add_sun(makevec2d(0, 0), 16, 0.8)
+
 
 local dt = 1 / 60
 function update_bodies()
