@@ -78,8 +78,6 @@ function generate_fragments(body, fragment_count)
     
     local min_dist = radius
 
-    printh(body.pos)
-
     local da = 1 / fragment_count
     for i = 1, fragment_count do
         local angle = da * i
@@ -124,13 +122,10 @@ function update_collisions()
             local b2 = bodies[j]
 
             if collides(b1, b2) then 
-                printh(i .. " and " .. j .. " collide")
                 add(collisions, { first = b1, second = b2 })
             end
         end
     end
-
-    if #collisions  > 0 then printh("Number of collisions: " .. #collisions) end
 
     for _, pair in ipairs(collisions) do
         local b1 = pair.first
@@ -171,8 +166,10 @@ function add_player(playeridx, sprite)
         controldir = makevec2d(0, 0),
         xdown = false,
         sprite = sprite,
-        alive = true
+        alive = true,
+        wins = 0
     }
+
     add(players, player)
 
     return player
@@ -216,12 +213,20 @@ function x_just_pressed(player)
 end
 
 local recoil_strength = 240
+function calculate_recoil(body, shootdir)
+    local u = body.vel:unit() * -1
+    local v = shootdir:unit()
+    local dot = u.x * v.x + u.y * v.y
+    printh(dot)
+    return -recoil_strength * v * (-2.5 * dot + 3.5)
+end
+
 local shoot_strength = 5
 function shoot_projectile(player, shootdir)
     if (shootdir.x == 0 and shootdir.y == 0) return
 
     local body = player.body
-    body:add_force(shootdir * (-recoil_strength))
+    body:add_force(calculate_recoil(body, shootdir))
 
     -- offset projectile position by player radius in the shooting direction
     local proj_pos = body.pos + shootdir:unit() * (body.radius * 2.01) 
@@ -310,15 +315,47 @@ function _init()
     initialize_pause_screen()
 end
 
-local prev_num_bodies = 0
-
 local gameover_t = 0
+local winner = nil
+local new_level = false
+local max_wins = 5
 
+function update_endgame()
+    gameover_t += 1
+    if gameover_t > 60 then
+        -- next round
+        gameover_t = 0
+        
+        if winner != nil and winner.wins >= max_wins then
+            paused = true
+            players = {}
+        else
+            init_level(flr(rnd(3)) + 1)
+        end
+
+        winner = nil
+
+    end
+    
+    -- i hate it too
+    if gameover_t == 30 then
+        for _, player in ipairs(players) do
+            if player.alive then 
+                player.wins += 1
+                winner = player;
+                printh("Winner was player with controller #" .. winner.index)
+            end
+        end        
+    end
+end
+
+
+local prev_num_bodies = 0
 function _update60()
     if paused then
         if update_pause_screen() then
-            paused = false
             init_level(flr(rnd(3)) + 1)
+            paused = false
         end
     else
         update_player_controls()
@@ -329,18 +366,11 @@ function _update60()
         for _, player in ipairs(players) do
             players_alive = player.alive and players_alive + 1 or players_alive
         end
-    
-        if players_alive <= 1 then
-            gameover_t += 1
-            if gameover_t > 60 then
-                -- next round
-                gameover_t = 0
-                init_level(flr(rnd(3)) + 1)
-            end
-        end
-    
+
+        if players_alive <= 1 then update_endgame() end
+
         if #bodies != prev_num_bodies then
-            printh("Bodies:")
+            printh("World updated, bodies:")
             for _, body in ipairs(bodies) do
                 printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
             end
@@ -369,11 +399,58 @@ function draw_sun(x, y)
     end
 end
 
+local diagonal_proj = 21
+local vertical_proj = 22
+local horizontal_proj = 23
+function draw_projectile(body)
+    local dir = body.vel:unit()
+
+    local cx = nil
+    local cy = nil
+    local closest_dot = -20000
+    for x = -1, 1 do
+        for y = -1, 1 do 
+            if x != 0 or y != 0 then
+                local u = makevec2d(x, y):unit()
+                local dot = dir.x * u.x + dir.y * u.y
+                if dot > closest_dot then
+                    cx = x
+                    cy = y
+                    closest_dot = dot
+                end
+            end
+        end
+    end
+
+    local sprite = 1
+    if abs(cx) == abs(cy) then sprite = diagonal_proj 
+    elseif abs(cx) > abs(cy) then sprite = horizontal_proj
+    else sprite = vertical_proj end
+
+    local s = screen_space(body.pos)
+    spr(sprite, s.x - 2.5, s.y - 2.5, 
+        0.5, 0.5, cx < 0, cy > 0)
+end
+
+function draw_winner()
+    assert(winner != nil)
+
+    local star_width = 6
+    
+    local lx = screen_space(winner.body.pos.x) - (winner.wins / 2) * star_width
+    local y = screen_space(winner.body.pos.y) - 7
+    lx += 1
+    for i = 1, winner.wins do
+        spr(13, lx, y)
+        lx += star_width
+    end 
+end
+
 function _draw()
     if paused then
         draw_pause_screen()
     else
-        cls()
+        cls(1)
         fillp()
         palt(0, true)
 
@@ -390,6 +467,8 @@ function _draw()
                 else
                     spr(body.sprite, s.x - 3, s.y - 3)
                 end
+            elseif body.type == PROJECTILE then
+                draw_projectile(body)
             elseif body.type == SUN then
                 draw_sun(s.x, s.y)
             else
@@ -412,22 +491,27 @@ function _draw()
                 -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
             end
         end
+
+        -- draw stars above winner
+        if winner != nil then
+            draw_winner()
+        end
     end
 end
 
 __gfx__
-0000000000000000000000000000000000000000003c00cc00000000000000000000000002800000000000000000000000000000000000000000000000000000
-0000000000c7cc00000000000000000000000000dccd03cd00000000000000000000000000282002000000000000000000000000000000000000000000000000
-0070070003ccc3c00000000000000000000000000dd00dc000000000000000000000000000288228000000000000000000000000000000000000000000000000
-00077000033c333000000000000000000000000000000dd000000000000000000000000002800880000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000003c00cc0000000000000000000000000280000000000000000000000000000000a000000000000000000000
+0000000000c7cc00000000000000000000000000dccd03cd00000000000000000000000000282002000000000000000000000000aaaaa0000000000000000000
+0070070003ccc3c00000000000000000000000000dd00dc0000000000000000000000000002882280000000000000000000000000aaa00000000000000000000
+00077000033c333000000000000000000000000000000dd0000000000000000000000000028008800000000000000000000000000a0a00000000000000000000
 0007700003cc33c0000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 007007000cccc3c0000000000000000000000000cc00d3c000000000000000000000000000020000000000000000000000000000000000000000000000000000
 0000000000c77c00000000000000000000000000d3c00dcd00000000000000000000000000280000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000ddd00d000000000000000000000000002880000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000002228000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000088888800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000022882200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000066000006600000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000002228000000000000000000000000000a660000066000000a6600000000000000000000000000000000000000000000000000000000000000000000
+00000000088888800000000000000000000000000aa000000aa00000aa6600000000000000000000000000000000000000000000000000000000000000000000
+0000000002288220000000000000000000000000a00000000a000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000088822800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000028888800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000002288000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
