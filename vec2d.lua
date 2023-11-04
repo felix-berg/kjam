@@ -39,6 +39,14 @@ function vecmt.__mul(a, b)
     end
 end
 
+function vecmt:__eq(self, other)
+    return self.x == other.x and self.y == other.y
+end
+
+function vecmt:__tostring()
+    return self.x .. ", " .. self.y
+end
+
 function vecmt.__div(a, b)
     if type(a) == "number" then
         return makevec2d(
@@ -82,9 +90,6 @@ function vecmt:div(scalar)
     self.y /= scalar
 end
 
-function vecmt:__tostring()
-    return self.x .. ", " .. self.y
-end
 
 function vecmt:sizesq()
     return self.x * self.x + self.y * self.y
