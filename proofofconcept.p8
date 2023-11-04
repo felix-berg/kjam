@@ -5,6 +5,7 @@ __lua__
 #include vec2d.lua
 #include body.lua
 #include util.lua
+#include drawstate.lua
 
 local world_scale = 8
 local world_size = 128 / world_scale
@@ -19,13 +20,19 @@ end
 local bodies = {}
 
 -- objects with references to physics bodies
-local projectiles = {}
 local players = {}
 
+local projectiles = {}
 local projectile_mass = 0.15
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
-    local p = make_body(pos, vel, projectile_mass, projectile_radius, PROJECTILE, false)
+    local p = make_body(
+        pos, vel, 
+        projectile_mass, projectile_radius, 
+        PROJECTILE, DYNAMIC,
+        make_projectile_draw_state()
+    )
+
     add(bodies, p)
     add(projectiles, {
         body = p
@@ -47,15 +54,106 @@ function remove_dead_projectiles()
    end
 end
 
+function add_fragment(pos, vel, mass, radius)
+    add(bodies, make_body(
+        pos, vel, mass, radius, FRAGMENT, DYNAMIC,
+        make_fragment_draw_state()
+    ))
+end
+
+local fragment_max_spawn_distance = 2
+local min_explosion_strength = 1
+local max_explosion_strength = 3
+local angle_spread = 0.1
+local mass_falloff = 100
+local radius_multiplier = 0.1
+
+-- add exploding fragments of this body exploding into the "bodies" table
+function generate_fragments(body, fragment_count)
+    -- each fragment has a nth size and radius
+    local mass = body.mass / (fragment_count * mass_falloff)
+    local radius = radius_multiplier * body.radius / fragment_count 
+    
+    local min_dist = radius
+
+    printh(body.pos)
+
+    local da = 1 / fragment_count
+    for i = 1, fragment_count do
+        local angle = da * i
+        
+        angle += random_btwn(-angle_spread, angle_spread)
+        dist = random_btwn(min_dist, fragment_max_spawn_distance)
+
+        local angle_vec = makevec2d(cos(angle), sin(angle))
+        angle_vec:normalize()
+
+        local pos_offset = angle_vec * dist
+        local exp_strength = random_btwn(min_explosion_strength, max_explosion_strength)
+        local vel = angle_vec * exp_strength
+
+        add_fragment(body.pos + pos_offset, vel, mass, radius)
+    end
+end
+
+function handle_body_collision(b1, b2)
+    if (b1.type != SUN) del(bodies, b1)
+    if (b2.type != SUN) del(bodies, b2)
+
+    if (b1.type == PLANET and b2.type != SUN) generate_fragments(b1, 3)
+    if (b2.type == PLANET and b1.type != SUN) generate_fragments(b2, 3)
+end
+
+function find_player(body)
+    for _, player in ipairs(players) do
+        if player.body == body then
+            return player
+        end
+    end
+    return nil
+end
+
+function update_collisions()
+    local collisions = {}
+    
+    for i = 1, #bodies do
+        local b1 = bodies[i]
+        for j = i + 1, #bodies do 
+            local b2 = bodies[j]
+
+            if collides(b1, b2) then 
+                printh(i .. " and " .. j .. " collide")
+                add(collisions, { first = b1, second = b2 })
+            end
+        end
+    end
+
+    if #collisions  > 0 then printh("Number of collisions: " .. #collisions) end
+
+    for _, pair in ipairs(collisions) do
+        local b1 = pair.first
+        local b2 = pair.second
+
+        handle_body_collision(b1, b2)
+            
+        local p1 = find_player(b1)
+        local p2 = find_player(b2)
+
+        if p1 != nil then p1.alive = false end
+        if p2 != nil then p2.alive = false end
+    end
+end
+
 local player_mass = 4
 local player_radius = 0.32
 function add_player(pos, vel, playeridx)
-    local body = make_body(pos, vel, player_mass, player_radius, PLANET, false)
+    local body = make_body(pos, vel, player_mass, player_radius, PLANET, DYNAMIC)
     add(players, {
         body = body,
         index = playeridx,
         controldir = makevec2d(0, 0),
-        xdown = false
+        xdown = false,
+        alive = true
     })
     add(bodies, body)
 end
@@ -80,6 +178,7 @@ function shoot_projectile(player, shootdir)
 
     local body = player.body
     body:add_force(shootdir * (-1200))
+
     -- offset projectile position by player radius in the shooting direction
     local proj_pos = body.pos + shootdir:unit() * (body.radius * 2.01) 
     add_projectile(proj_pos, body.vel + shootdir * shoot_strength)
@@ -87,9 +186,11 @@ end
 
 function update_player_controls()
     for _, player in ipairs(players) do
-        player.controldir = gamepad_dir(player.index)
-        if x_just_pressed(player) then
-            shoot_projectile(player, player.controldir)
+        if player.alive then
+            player.controldir = gamepad_dir(player.index)
+            if x_just_pressed(player) then
+                shoot_projectile(player, player.controldir)
+            end
         end
     end
 end
@@ -109,7 +210,7 @@ add_player(
 add(bodies, make_body(
     makevec2d(0, 0), 
     makevec2d(0, 0),
-    16, 0.8, SUN, true))
+    16, 0.8, SUN, STATIC))
 
 local dt = 1 / 60
 function update_bodies()
@@ -133,9 +234,21 @@ function _init()
     camera(-64, -64)
 end
 
+local prev_num_bodies = 0
 function _update60()
     update_player_controls()
     remove_dead_projectiles()
+    update_collisions()
+
+
+    if #bodies != prev_num_bodies then
+        printh("Bodies:")
+        for _, body in ipairs(bodies) do
+            printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
+        end
+        prev_num_bodies = #bodies
+    end
+
     update_bodies()
 end
 

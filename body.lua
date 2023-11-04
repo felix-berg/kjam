@@ -1,13 +1,17 @@
 local gravity_constant = 10
 
-local PLANET = 1
-local SUN = 2
-local PROJECTILE = 3
+local SUN = 1
+local PROJECTILE = 2
+local PLANET = 3
+local FRAGMENT = 4
+
+local DYNAMIC = false
+local STATIC = true
 
 local bodymt = {}
 bodymt.__index = bodymt
 
-function make_body(pos, vel, mass, radius, type, is_static)
+function make_body(pos, vel, mass, radius, type, is_static, draw_data)
     local sb = {
         pos = pos,
         vel = vel,
@@ -15,7 +19,8 @@ function make_body(pos, vel, mass, radius, type, is_static)
         mass = mass,
         radius = radius,
         type = type,
-        is_static = is_static
+        is_static = is_static,
+        draw_data = draw_data
     }
     
     setmetatable(sb, bodymt)
@@ -49,5 +54,14 @@ function bodymt:attract_to(body)
 end
 
 function collides(b1, b2)
-    return (b2 - b1):sizesq() < (b1.radius + b2.radius) * (b1.radius + b2.radius)
+    local r = b1.radius + b2.radius
+    return (b2.pos - b1.pos):sizesq() < r * r
+end
+
+function body_type_string(body)
+    if body.type == SUN then return "SUN"
+    elseif body.type == PROJECTILE then return "PROJECTILE"
+    elseif body.type == PLANET then return "PLANET"
+    elseif body.type == FRAGMENT then return "FRAGMENT" end 
+    return "UNKNOWN"
 end

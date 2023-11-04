@@ -35,3 +35,7 @@ function map(val, old_min, old_max, min, max)
     local t = ((val - old_min) / (old_max - old_min))
     return lerp(t, min, max)
 end
+
+function random_btwn(min, max)
+    return rnd(max - min) + min
+end
