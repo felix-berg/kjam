@@ -1,15 +1,20 @@
 local gravity_constant = 10
 
+local PLANET = 1
+local SUN = 2
+local PROJECTILE = 3
+
 local bodymt = {}
 bodymt.__index = bodymt;
 
-function make_body(pos, vel, mass, radius)
+function make_body(pos, vel, mass, radius, type)
     local sb = {
         pos = pos, 
         vel = vel,
         acc = makevec2d(0, 0),
         mass = mass,
-        radius = radius 
+        radius = radius,
+        type = type
     }
     
     setmetatable(sb, bodymt)
@@ -27,7 +32,6 @@ function bodymt:add_force(force)
 end
 
 function bodymt:update(dt)
-    printh(self.acc)
     self.vel += self.acc * dt
     self.pos += self.vel * dt
     self.acc:set(0, 0)
@@ -38,4 +42,8 @@ function bodymt:attract_to(body)
     local d = body.pos - self.pos
     d:set_size(f)
     self:add_force(d)
+end
+
+function collides(b1, b2)
+    return (b2 - b1):sizesq() < (b1.radius + b2.radius) * (b1.radius + b2.radius)
 end
