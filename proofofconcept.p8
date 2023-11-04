@@ -22,15 +22,16 @@ local bodies = {}
 -- objects with references to physics bodies
 local players = {}
 
-local projectile_mass = 0.15
+local projectile_mass = 0.05
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
-    local p = make_body(
-        pos, vel, 
-        projectile_mass, projectile_radius, 
-        PROJECTILE, DYNAMIC,
-        5
-    )
+    local p = make_body(pos)
+    p.vel = vel:copy()
+    p.mass = projectile_mass
+    p.radius = projectile_radius
+    p.type = PROJECTILE
+    p.is_static = DYNAMIC
+    p.sprite = 5
 
     add(bodies, p)
 end
@@ -50,10 +51,14 @@ function remove_dead_projectiles()
 end
 
 function add_fragment(pos, vel, mass, radius)
-    add(bodies, make_body(
-        pos, vel, mass, radius, FRAGMENT, DYNAMIC,
-        5
-    ))
+    local fragment_body = make_body(pos)
+    fragment_body.vel = vel:copy()
+    fragment_body.mass = mass
+    fragment_body.radius = radius
+    fragment_body.type = FRAGMENT
+    fragment_body.is_static = DYNAMIC
+    fragment_body.sprite = 5
+    add(bodies, fragment_body)
 end
 
 local fragment_max_spawn_distance = 2
@@ -142,28 +147,53 @@ end
 local player_mass = 4
 local player_radius = 0.32
 function add_player(pos, vel, playeridx)
-    local body = make_body(pos, vel, player_mass, player_radius, PLANET, DYNAMIC,
-        1)
-    add(players, {
+    local body = make_body(pos)
+    body.vel = vel:copy()
+    body.mass = player_mass
+    body.radius = player_radius
+    body.type = PLANET
+    body.is_static = false
+    body.sprite = 1
+
+    local player = {
         body = body,
         index = playeridx,
         controldir = makevec2d(0, 0),
         xdown = false,
         alive = true
-    })
+    }
+    add(players, player)
     add(bodies, body)
+
+    return player
+end
+
+function add_planet(pos, mass, radius)
+    local body = make_body(pos)
+    body.mass = mass
+    body.radius = radius
+    body.type = PLANET
+    body.is_static = DYNAMIC
+    body.sprite = 1
+    add(bodies, body)
+
+    return body
 end
 
 function add_sun(pos, mass, radius)
-    add(bodies, make_body(
-        makevec2d(0, 0), 
-        makevec2d(0, 0),
-        mass, radius, SUN, STATIC,
-        0))
+    local body = make_body(pos)
+    body.mass = mass
+    body.radius = radius
+    body.type = SUN
+    body.is_static = STATIC
+    body.sprite = 0
+    add(bodies, body)
+
+    return body
 end
 
 function x_just_pressed(player)
-    if btn(controls.x, player.index) then
+    if btn(controls.x, player.index) or btn(controls.o, player.index) then
         if player.xdown then return false
         else 
             player.xdown = true
@@ -181,7 +211,7 @@ function shoot_projectile(player, shootdir)
     if (shootdir.x == 0 and shootdir.y == 0) return
 
     local body = player.body
-    body:add_force(shootdir * (-1200))
+    body:add_force(shootdir * (-recoil_strength))
 
     -- offset projectile position by player radius in the shooting direction
     local proj_pos = body.pos + shootdir:unit() * (body.radius * 2.01) 
@@ -217,15 +247,59 @@ function update_bodies()
     end
 end
 
-function _init()
-    camera(-64, -64)
+function init_level(level)
+    if level == 1 then
+        -- two planets
+        local player1 = add_player(makevec2d(-4, -4), makevec2d(0, 0), 0)
+        local player2 = add_player(makevec2d( 4,  4), makevec2d(0, 0), 1)
+        player1.body.vel = tangent_vel(player1.body, player2.body)
+        player2.body.vel = tangent_vel(player2.body, player1.body)
+    elseif level == 2 then
+        -- sun and two planets
+        
+        local sun = add_sun(makevec2d(0, 0), 16, 0.8)
+
+        local player1 = add_player(makevec2d(-4, -4), makevec2d(0, 0), 0)
+        local player2 = add_player(makevec2d( 4,  4), makevec2d(0, 0), 1)
+        player1.body.vel = tangent_vel(player1.body, sun)
+        player2.body.vel = tangent_vel(player2.body, sun)
+    elseif level == 3 then
+        -- sun, mercury and two planets
+        
+        local sun = add_sun(makevec2d(0, 0), 16, 0.8)
+
+        local mercury = add_planet(makevec2d(0, -2), 0.2, 0.2)
+        mercury.vel = tangent_vel(mercury, sun)
+        mercury.sprite = 33
+
+        local player1 = add_player(makevec2d(-5, -5), makevec2d(0, 0), 0)
+        local player2 = add_player(makevec2d( 5,  5), makevec2d(0, 0), 1)
+        player1.body.vel = tangent_vel(player1.body, sun)
+        player2.body.vel = tangent_vel(player2.body, sun)
+    elseif level == 4 then
+        -- two suns
+        
+        local sun1 = add_sun(makevec2d( 4, 0), 16, 0.8)
+        local sun2 = add_sun(makevec2d(-4, 0), 16, 0.8)
+
+        local player1 = add_player(makevec2d(0, 0), makevec2d(5, 6), 0)
+        -- local player2 = add_player(makevec2d( 5,  5), makevec2d(0, 0), 1)
+        -- player1.body.vel = tangent_vel(player1.body, sun)
+    end
 end
 
--- initialize_pause_screen()
+
+function _init()
+    camera(-64, -64)
+
+    init_level(4)
+end
+
+initialize_pause_screen()
 local prev_num_bodies = 0
 
 function _update60()
-    -- local result = update_pause_screen()
+    local result = update_pause_screen()
 
     update_player_controls()
     remove_dead_projectiles()
@@ -262,31 +336,33 @@ function draw_sun(x, y)
 end
 
 function _draw() 
-    -- draw_pause_screen()
+    draw_pause_screen()
 
-    cls()
-    fillp()
-    palt(0, true)
+    -- cls()
+    -- fillp()
+    -- palt(0, true)
 
-    for _, body in ipairs(bodies) do
-        local s = screen_space(body.pos)
-        local r = screen_space(body.radius)
-        if body.type == PLANET or body.type == FRAGMENT then
-            if fget(body.sprite, 0) then
-                local tile = flr(body.rand * 4)
-                local tile_x = tile % 2
-                local tile_y = flr(tile / 2)
-                sspr(body.sprite * 8 + tile_x * 4, flr(body.sprite / 16) + tile_y * 4, 4, 4, s.x - 3, s.y - 3)
-            else
-                spr(body.sprite, s.x - 3, s.y - 3)
-            end
-        elseif body.type == SUN then
-            draw_sun(s.x, s.y)
-        else
-            circ(s.x, s.y, r)
-        end
-    end
+    -- -- draw bodies
+    -- for _, body in ipairs(bodies) do
+    --     local s = screen_space(body.pos)
+    --     local r = screen_space(body.radius)
+    --     if body.type == PLANET or body.type == FRAGMENT then
+    --         if fget(body.sprite, 0) then -- fragment sprite flag
+    --             local tile = flr(body.rand * 4)
+    --             local tile_x = tile % 2
+    --             local tile_y = flr(tile / 2)
+    --             sspr(body.sprite * 8 + tile_x * 4, flr(body.sprite / 16) + tile_y * 4, 4, 4, s.x - 3, s.y - 3)
+    --         else
+    --             spr(body.sprite, s.x - 3, s.y - 3)
+    --         end
+    --     elseif body.type == SUN then
+    --         draw_sun(s.x, s.y)
+    --     else
+    --         circ(s.x, s.y, r)
+    --     end
+    -- end
 
+    -- -- draw aiming arrows
     -- for _, player in ipairs(players) do
     --     local s = screen_space(player.body.pos)
     --     local d = screen_space(player.controldir * 0.8)

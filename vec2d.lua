@@ -70,6 +70,10 @@ function vecmt:set(x, y)
     self.y = y
 end
 
+function vecmt:copy()
+    return makevec2d(self.x, self.y)
+end
+
 function vecmt:addv(other)
     self.x += other.x
     self.y += other.y

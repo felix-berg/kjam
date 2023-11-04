@@ -11,16 +11,17 @@ local STATIC = true
 local bodymt = {}
 bodymt.__index = bodymt
 
-function make_body(pos, vel, mass, radius, type, is_static, sprite)
+function make_body(pos)
+    pos = pos or makevec2d(0, 0) -- default pos 0, 0
     local sb = {
         pos = pos,
-        vel = vel,
+        vel = makevec2d(0, 0),
         acc = makevec2d(0, 0),
         mass = mass,
-        radius = radius,
-        type = type,
-        is_static = is_static,
-        sprite = sprite,
+        radius = 1,
+        type = PLANET,
+        is_static = false,
+        sprite = 1,
         rand = rnd()
     }
     

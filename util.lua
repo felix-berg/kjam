@@ -39,3 +39,20 @@ end
 function random_btwn(min, max)
     return rnd(max - min) + min
 end
+
+function tangent_vel(b1, b2)
+    local d = b2.pos - b1.pos
+    local com
+    if b1.is_static then
+        return makevec2d(0, 0)
+    elseif b2.is_static then
+        com = b2.pos
+    else
+        com = (b1.pos * b1.mass + b2.pos * b2.mass) / (b1.mass + b2.mass)
+    end
+    local c = com - b1.pos
+    local dir = makevec2d(-d.y, d.x)
+    dir:normalize()
+    local vel = sqrt(gravity_constant * b2.mass * c:size() / d:sizesq())
+    return dir * vel
+end
