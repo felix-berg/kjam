@@ -9,7 +9,7 @@ local sprite_choices = {-- list of available sprite_choices
 
 local UNAVAILABLE_SPRITE = 62
 local pause_screen_players = {} 
-local num_players = 4
+local num_players = 2
 
 local player_wins = {0, 0, 0, 0}
 
@@ -52,21 +52,22 @@ function update_pause_screen()
         end
     end
 
-    if btnp(controls.o) then
-        local result = {}
+    local num_commited = 0
+    for _, plr in ipairs(pause_screen_players) do
+        if plr.commited then num_commited += 1 end
+    end
+
+    if btnp(controls.o) and num_commited > 1 then
         for i, player in ipairs(pause_screen_players) do
             if player.commited then
-                add(result, { 
-                    index = i,
-                    control_index = player.player_index, 
-                    sprite = sprite_choices[player.choice_index].id
-                })
+                add_player(player.player_index, sprite_choices[player.choice_index].id)
+                printh(player.player_index)
             end
         end
 
-        return result
+        return true
     else
-        return nil
+        return false
     end
 end 
 
