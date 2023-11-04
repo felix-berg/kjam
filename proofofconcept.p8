@@ -16,7 +16,6 @@ function screen_space(pos)
 end
 
 -- physics entities
-local static_bodies = {}
 local bodies = {}
 
 -- objects with references to physics bodies
@@ -26,7 +25,7 @@ local players = {}
 local projectile_mass = 0.15
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
-    local p = make_body(pos, vel, projectile_mass, projectile_radius, PROJECTILE)
+    local p = make_body(pos, vel, projectile_mass, projectile_radius, PROJECTILE, false)
     add(bodies, p)
     add(projectiles, {
         body = p
@@ -51,17 +50,31 @@ end
 local player_mass = 4
 local player_radius = 0.32
 function add_player(pos, vel, playeridx)
-    local body = make_body(pos, vel, player_mass, player_radius, PLANET)
+    local body = make_body(pos, vel, player_mass, player_radius, PLANET, false)
     add(players, {
         body = body,
         index = playeridx,
-        controldir = makevec2d(0, 0)
+        controldir = makevec2d(0, 0),
+        xdown = false
     })
     add(bodies, body)
 end
 
+function x_just_pressed(player)
+    if btn(controls.x, player.index) then
+        if player.xdown then return false
+        else 
+            player.xdown = true
+            return true
+        end
+    else 
+        player.xdown = false
+        return false
+    end
+end
+
 local recoil_strength = 1200
-local 
+local shoot_strength = 10
 function shoot_projectile(player, shootdir)
     if (shootdir.x == 0 and shootdir.y == 0) return
 
@@ -69,13 +82,13 @@ function shoot_projectile(player, shootdir)
     body:add_force(shootdir * (-1200))
     -- offset projectile position by player radius in the shooting direction
     local proj_pos = body.pos + shootdir:unit() * (body.radius * 2.01) 
-    add_projectile(proj_pos, body.vel + shootdir * 10)
+    add_projectile(proj_pos, body.vel + shootdir * shoot_strength)
 end
 
 function update_player_controls()
     for _, player in ipairs(players) do
         player.controldir = gamepad_dir(player.index)
-        if btnp(controls.x, player.index) then
+        if x_just_pressed(player) then
             shoot_projectile(player, player.controldir)
         end
     end
@@ -87,28 +100,32 @@ add_player(
     0
 )
 
-add(static_bodies, make_body(
+add_player(
+    makevec2d(4, 4),
+    makevec2d(4, -4),
+    1
+)
+
+add(bodies, make_body(
     makevec2d(0, 0), 
     makevec2d(0, 0),
-    16, 0.8, SUN))
+    16, 0.8, SUN, true))
 
 local dt = 1 / 60
 function update_bodies()
     -- dynamic bodies attract to static bodies and each other
     for _, body in ipairs(bodies) do 
-        for _, static_body in ipairs(static_bodies) do
-            body:attract_to(static_body)
-        end
-
-        for _, other in ipairs(bodies) do
-            if body != other then
-                body:attract_to(other)
+        if not body.is_static then 
+            for _, other in ipairs(bodies) do
+                if body != other then
+                    body:attract_to(other)
+                end
             end
         end
     end
 
     for _, body in ipairs(bodies) do
-        body:update(dt)
+        if (not body.is_static) body:update(dt)
     end
 end
 
@@ -145,27 +162,24 @@ function _draw()
     fillp()
     palt(0, true)
 
-    for _, v in ipairs(bodies) do
-        local s = screen_space(v.pos)
-        local r = screen_space(v.radius)
-        if v.type == PLANET then
+    for _, body in ipairs(bodies) do
+        local s = screen_space(body.pos)
+        local r = screen_space(body.radius)
+        if body.type == PLANET then
             spr(1, s.x - 4, s.y - 4)
-        elseif v.type == SUN then
+        elseif body.type == SUN then
             draw_sun(s.x, s.y)
         else
             circ(s.x, s.y, r)
         end
     end
 
-    for _, v in ipairs(static_bodies) do
-        local s = screen_space(v.pos)
-        local r = screen_space(v.radius)
-        if v.type == SUN then
-            draw_sun(s.x, s.y)
-        else
-            circ(s.x, s.y, r)
+    for _, player in ipairs(players) do
+        if player.controldir.x != 0 or player.controldir.y != 0 then
+            local s = screen_space(player.body.pos)
+            local d = screen_space(player.controldir * 0.8)
+            line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
         end
-            
     end
 end
 

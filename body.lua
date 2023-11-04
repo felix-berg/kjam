@@ -7,14 +7,15 @@ local PROJECTILE = 3
 local bodymt = {}
 bodymt.__index = bodymt
 
-function make_body(pos, vel, mass, radius, type)
+function make_body(pos, vel, mass, radius, type, is_static)
     local sb = {
         pos = pos,
         vel = vel,
         acc = makevec2d(0, 0),
         mass = mass,
         radius = radius,
-        type = type
+        type = type,
+        is_static = is_static
     }
     
     setmetatable(sb, bodymt)
@@ -37,9 +38,12 @@ function bodymt:update(dt)
     self.acc:set(0, 0)
 end
 
+local gravity_range = 100
 function bodymt:attract_to(body)
-    local f = attraction_force(self.pos, self.mass, body.pos, body.mass)
     local d = body.pos - self.pos
+    if d:sizesq() > gravity_range * gravity_range then return end
+
+    local f = attraction_force(self.pos, self.mass, body.pos, body.mass)
     d:set_size(f)
     self:add_force(d)
 end
