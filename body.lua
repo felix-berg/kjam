@@ -5,11 +5,11 @@ local SUN = 2
 local PROJECTILE = 3
 
 local bodymt = {}
-bodymt.__index = bodymt;
+bodymt.__index = bodymt
 
 function make_body(pos, vel, mass, radius, type)
     local sb = {
-        pos = pos, 
+        pos = pos,
         vel = vel,
         acc = makevec2d(0, 0),
         mass = mass,
