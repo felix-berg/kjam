@@ -11,7 +11,7 @@ local STATIC = true
 local bodymt = {}
 bodymt.__index = bodymt
 
-function make_body(pos, vel, mass, radius, type, is_static, draw_data)
+function make_body(pos, vel, mass, radius, type, is_static, sprite)
     local sb = {
         pos = pos,
         vel = vel,
@@ -20,7 +20,8 @@ function make_body(pos, vel, mass, radius, type, is_static, draw_data)
         radius = radius,
         type = type,
         is_static = is_static,
-        draw_data = draw_data
+        sprite = sprite,
+        rand = rnd()
     }
     
     setmetatable(sb, bodymt)
