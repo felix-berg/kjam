@@ -6,6 +6,7 @@ __lua__
 #include body.lua
 #include util.lua
 #include drawstate.lua
+#include pausescreen.lua
 
 local world_scale = 8
 local world_size = 128 / world_scale
@@ -22,7 +23,6 @@ local bodies = {}
 -- objects with references to physics bodies
 local players = {}
 
-local projectiles = {}
 local projectile_mass = 0.15
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
@@ -34,22 +34,18 @@ function add_projectile(pos, vel)
     )
 
     add(bodies, p)
-    add(projectiles, {
-        body = p
-    })
 end
 
 function projectile_should_die(proj)
-    local p = proj.body.pos
+    local p = proj.pos
     return p.x < world_tl.x - world_size / 2 or p.x > world_br.x + world_size / 2 or
            p.y < world_tl.y - world_size / 2 or p.y > world_br.y + world_size / 2
 end
 
 function remove_dead_projectiles()
-   for _, proj in ipairs(projectiles) do
-        if projectile_should_die(proj) then 
-            del(bodies, proj.body)
-            del(projectiles, proj)
+   for _, body in ipairs(bodies) do
+        if body.type == PROJECTILE and projectile_should_die(body) then 
+            del(bodies, body.body)
         end
    end
 end
@@ -204,21 +200,6 @@ function update_player_controls()
     end
 end
 
-add_player(
-    makevec2d(-4, -4), 
-    makevec2d(-4, 4), 
-    0
-)
-
-add_player(
-    makevec2d(4, 4),
-    makevec2d(4, -4),
-    1
-)
-
-add_sun(makevec2d(0, 0), 16, 0.8)
-
-
 local dt = 1 / 60
 function update_bodies()
     -- dynamic bodies attract to static bodies and each other
@@ -241,22 +222,26 @@ function _init()
     camera(-64, -64)
 end
 
+initialize_pause_screen()
 local prev_num_bodies = 0
+
 function _update60()
-    update_player_controls()
-    remove_dead_projectiles()
-    update_collisions()
+    local result = update_pause_screen()
+
+    -- update_player_controls()
+    -- remove_dead_projectiles()
+    -- update_collisions()
 
 
-    if #bodies != prev_num_bodies then
-        printh("Bodies:")
-        for _, body in ipairs(bodies) do
-            printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
-        end
-        prev_num_bodies = #bodies
-    end
+    -- if #bodies != prev_num_bodies then
+    --     printh("Bodies:")
+    --     for _, body in ipairs(bodies) do
+    --         printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
+    --     end
+    --     prev_num_bodies = #bodies
+    -- end
 
-    update_bodies()
+    -- update_bodies()
 end
 
 ---draw---
@@ -278,36 +263,38 @@ function draw_sun(x, y)
 end
 
 function _draw() 
-    cls()
-    fillp()
-    palt(0, true)
+    draw_pause_screen()
 
-    for _, body in ipairs(bodies) do
-        local s = screen_space(body.pos)
-        local r = screen_space(body.radius)
-        if body.type == PLANET then
-            spr(1, s.x - 3, s.y - 3)
-        elseif body.type == SUN then
-            draw_sun(s.x, s.y)
-        else
-            circ(s.x, s.y, r)
-        end
-    end
+    -- cls()
+    -- fillp()
+    -- palt(0, true)
 
-    for _, player in ipairs(players) do
-        local s = screen_space(player.body.pos)
-        local d = screen_space(player.controldir * 0.8)
-        if player.controldir.x != 0 and player.controldir.y != 0 then
-            sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
-            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-        elseif player.controldir.x != 0 then
-            sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
-            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-        elseif player.controldir.y != 0 then
-            sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
-            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-        end
-    end
+    -- for _, body in ipairs(bodies) do
+    --     local s = screen_space(body.pos)
+    --     local r = screen_space(body.radius)
+    --     if body.type == PLANET then
+    --         spr(1, s.x - 3, s.y - 3)
+    --     elseif body.type == SUN then
+    --         draw_sun(s.x, s.y)
+    --     else
+    --         circ(s.x, s.y, r)
+    --     end
+    -- end
+
+    -- for _, player in ipairs(players) do
+    --     local s = screen_space(player.body.pos)
+    --     local d = screen_space(player.controldir * 0.8)
+    --     if player.controldir.x != 0 and player.controldir.y != 0 then
+    --         sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
+    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    --     elseif player.controldir.x != 0 then
+    --         sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
+    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    --     elseif player.controldir.y != 0 then
+    --         sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
+    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    --     end
+    -- end
 end
 
 __gfx__
@@ -335,10 +322,10 @@ __gfx__
 000000000dddd6600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000dd66000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000009999000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000099944900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000094499900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000044994400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000044444400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-00000000004444000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c100000000000000000000
+000000000099990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc100000006600000000000
+00000000099944900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccc100000060060000000000
+00000000094499900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccc100000606006000000000
+000000000449944000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc100000600606000000000
+0000000004444440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c100000060060000000000
+00000000004444000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006600000000000
