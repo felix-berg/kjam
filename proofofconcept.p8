@@ -22,7 +22,7 @@ local bodies = {}
 -- objects with references to physics bodies
 local players = {}
 
-local projectile_mass = 0.05
+local projectile_mass = 0.1
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
     local p = make_body(pos)
@@ -38,14 +38,14 @@ end
 
 function projectile_should_die(proj)
     local p = proj.pos
-    return p.x < world_tl.x - world_size / 2 or p.x > world_br.x + world_size / 2 or
-           p.y < world_tl.y - world_size / 2 or p.y > world_br.y + world_size / 2
+    return p.x < world_tl.x or p.x > world_br.x or
+           p.y < world_tl.y or p.y > world_br.y
 end
 
 function remove_dead_projectiles()
    for _, body in ipairs(bodies) do
         if body.type == PROJECTILE and projectile_should_die(body) then 
-            del(bodies, body.body)
+            del(bodies, body)
         end
    end
 end
@@ -205,8 +205,8 @@ function x_just_pressed(player)
     end
 end
 
-local recoil_strength = 1200
-local shoot_strength = 10
+local recoil_strength = 240
+local shoot_strength = 5
 function shoot_projectile(player, shootdir)
     if (shootdir.x == 0 and shootdir.y == 0) return
 
@@ -235,7 +235,7 @@ function update_bodies()
     for _, body in ipairs(bodies) do 
         if not body.is_static then 
             for _, other in ipairs(bodies) do
-                if body != other then
+                if body != other and other.type != PROJECTILE then
                     body:attract_to(other)
                 end
             end
@@ -248,6 +248,9 @@ function update_bodies()
 end
 
 function init_level(level)
+    bodies = {}
+    players = {}
+
     if level == 1 then
         -- two planets
         local player1 = add_player(makevec2d(-4, -4), makevec2d(0, 0), 0)
@@ -292,19 +295,34 @@ end
 function _init()
     camera(-64, -64)
 
-    init_level(4)
+    init_level(flr(rnd(3)) + 1)
 end
 
-initialize_pause_screen()
+-- initialize_pause_screen()
 local prev_num_bodies = 0
 
+local gameover_t = 0
+
 function _update60()
-    local result = update_pause_screen()
+    -- local result = update_pause_screen()
 
     update_player_controls()
     remove_dead_projectiles()
     update_collisions()
 
+    local players_alive = 0
+    for _, player in ipairs(players) do
+        players_alive = player.alive and players_alive + 1 or players_alive
+    end
+
+    if players_alive <= 1 then
+        gameover_t += 1
+        if gameover_t > 60 then
+            -- next round
+            gameover_t = 0
+            init_level(flr(rnd(3)) + 1)
+        end
+    end
 
     if #bodies != prev_num_bodies then
         printh("Bodies:")
@@ -336,47 +354,47 @@ function draw_sun(x, y)
 end
 
 function _draw() 
-    draw_pause_screen()
+    -- draw_pause_screen()
 
-    -- cls()
-    -- fillp()
-    -- palt(0, true)
+    cls()
+    fillp()
+    palt(0, true)
 
-    -- -- draw bodies
-    -- for _, body in ipairs(bodies) do
-    --     local s = screen_space(body.pos)
-    --     local r = screen_space(body.radius)
-    --     if body.type == PLANET or body.type == FRAGMENT then
-    --         if fget(body.sprite, 0) then -- fragment sprite flag
-    --             local tile = flr(body.rand * 4)
-    --             local tile_x = tile % 2
-    --             local tile_y = flr(tile / 2)
-    --             sspr(body.sprite * 8 + tile_x * 4, flr(body.sprite / 16) + tile_y * 4, 4, 4, s.x - 3, s.y - 3)
-    --         else
-    --             spr(body.sprite, s.x - 3, s.y - 3)
-    --         end
-    --     elseif body.type == SUN then
-    --         draw_sun(s.x, s.y)
-    --     else
-    --         circ(s.x, s.y, r)
-    --     end
-    -- end
+    -- draw bodies
+    for _, body in ipairs(bodies) do
+        local s = screen_space(body.pos)
+        local r = screen_space(body.radius)
+        if body.type == PLANET or body.type == FRAGMENT then
+            if fget(body.sprite, 0) then -- fragment sprite flag
+                local tile = flr(body.rand * 4)
+                local tile_x = tile % 2
+                local tile_y = flr(tile / 2)
+                sspr(body.sprite * 8 + tile_x * 4, flr(body.sprite / 16) + tile_y * 4, 4, 4, s.x - 3, s.y - 3)
+            else
+                spr(body.sprite, s.x - 3, s.y - 3)
+            end
+        elseif body.type == SUN then
+            draw_sun(s.x, s.y)
+        else
+            circ(s.x, s.y, r)
+        end
+    end
 
-    -- -- draw aiming arrows
-    -- for _, player in ipairs(players) do
-    --     local s = screen_space(player.body.pos)
-    --     local d = screen_space(player.controldir * 0.8)
-    --     if player.controldir.x != 0 and player.controldir.y != 0 then
-    --         sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
-    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-    --     elseif player.controldir.x != 0 then
-    --         sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
-    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-    --     elseif player.controldir.y != 0 then
-    --         sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
-    --         -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-    --     end
-    -- end
+    -- draw aiming arrows
+    for _, player in ipairs(players) do
+        local s = screen_space(player.body.pos)
+        local d = screen_space(player.controldir * 0.8)
+        if player.controldir.x != 0 and player.controldir.y != 0 then
+            sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
+            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+        elseif player.controldir.x != 0 then
+            sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
+            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+        elseif player.controldir.y != 0 then
+            sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
+            -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+        end
+    end
 end
 
 __gfx__

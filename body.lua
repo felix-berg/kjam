@@ -1,4 +1,4 @@
-local gravity_constant = 10
+local gravity_constant = 2
 
 local SUN = 1
 local PROJECTILE = 2
@@ -45,7 +45,7 @@ function bodymt:update(dt)
     self.acc:set(0, 0)
 end
 
-local gravity_range = 100
+local gravity_range = 12
 function bodymt:attract_to(body)
     local d = body.pos - self.pos
     if d:sizesq() > gravity_range * gravity_range then return end
