@@ -27,6 +27,11 @@ function gamepad_dir(playeridx)
     return v:unit()
 end
 
+function anyone_pressed(button)
+    for i = 0, 7 do if btnp(button, i) then return true end end
+    return false
+end
+
 function lerp(t, min, max)
     return t * (max - min) + min
 end

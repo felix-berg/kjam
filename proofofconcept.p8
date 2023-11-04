@@ -54,7 +54,6 @@ function remove_dead_projectiles()
    end
 end
 
-
 function add_fragment(pos, vel, mass, radius)
     local fragment_body = make_body(pos)
     fragment_body.vel = vel:copy()
@@ -171,6 +170,7 @@ function add_player(playeridx, sprite, fg_color, bg_color)
         sprite = sprite,
         alive = true,
         wins = 0,
+        out_of_bounds_time = 0,
         fg_color = fg_color,
         bg_color = bg_color
     }
@@ -246,6 +246,19 @@ function update_player_controls()
                 shoot_projectile(player, player.controldir)
             end
         end
+    end
+end
+
+local out_of_bounds_death_time = 300
+function update_out_of_bounds_time(player)
+    if out_of_bounds(player.body.pos, world_tl, world_br) then
+        player.out_of_bounds_time += 1
+    else
+        player.out_of_bounds_time = 0
+    end
+    if player.out_of_bounds_time > out_of_bounds_death_time then
+        del(bodies, player.body)
+        player.alive = false
     end
 end
 
@@ -366,7 +379,7 @@ function _update60()
         update_player_controls()
         remove_dead_projectiles()
         update_collisions()
-    
+        
         local players_alive = 0
         for _, player in ipairs(players) do
             players_alive = player.alive and players_alive + 1 or players_alive
@@ -374,6 +387,12 @@ function _update60()
 
         if players_alive <= 1 then update_endgame() end
 
+        for _, player in ipairs(players) do
+            if (player.alive) update_out_of_bounds_time(player)
+        end
+
+        update_bodies()
+        
         if #bodies != prev_num_bodies then
             printh("World updated, bodies:")
             for _, body in ipairs(bodies) do
@@ -381,8 +400,6 @@ function _update60()
             end
             prev_num_bodies = #bodies
         end
-    
-        update_bodies()
     end
 end
 
@@ -469,6 +486,7 @@ local vertical_ob_arrow_x = 96
 local vertical_ob_arrow_y = 24
 local horizontal_ob_arrow_x = 104
 local horizontal_ob_arrow_y = 24
+local ob_blink_freq = 10
 
 function draw_out_of_bounds_ui(player)
     if not out_of_bounds(player.body.pos, world_tl, world_br) then return end
@@ -497,8 +515,6 @@ function draw_out_of_bounds_ui(player)
     elseif px > world_br.x - w then px = world_br.x - w end
     if     py < world_tl.y + w then py = world_tl.y + w
     elseif py > world_br.y - w then py = world_br.y - w end
-
-    
     
     local dist = (makevec2d(px, py) - player.body.pos):size()
     local max_dist = 48
@@ -506,9 +522,16 @@ function draw_out_of_bounds_ui(player)
 
     local c = screen_space(makevec2d(px, py))
     local s = c - makevec2d(sz, sz) / 2
+    
+    if player.out_of_bounds_time >= 30 and flr(player.out_of_bounds_time / ob_blink_freq) % 2 == 0 then 
+        pal(12, 10)
+        pal(1, 7)
+    else 
+        pal(12, player.fg_color)
+        pal(1, player.bg_color)
+    end
 
-    pal(12, player.fg_color)
-    pal(1, player.bg_color)
+
     sspr(spritex, spritey, 8, 8, s.x, s.y, sz, sz, px > 0, py > 0)
     pal()
 end
@@ -559,8 +582,10 @@ function _draw()
 
         -- draw aiming arrows
         for _, player in ipairs(players) do
-            draw_aiming_arrows(player)
-            draw_out_of_bounds_ui(player)
+            if player.alive then
+                draw_aiming_arrows(player)
+                draw_out_of_bounds_ui(player)
+            end
         end
 
         -- draw stars above winner
