@@ -59,7 +59,7 @@ function update_pause_screen()
     if btnp(controls.o) and num_commited > 1 then
         for i, player in ipairs(pause_screen_players) do
             if player.commited then
-                add_player(player.player_index, sprite_choices[player.choice_index].id)
+                add_player(player.player_index, sprite_choices[player.choice_index].id, player.marker_color, player.marker_shadow_color)
             end
         end
         return true

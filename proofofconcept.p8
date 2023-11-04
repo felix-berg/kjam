@@ -38,10 +38,12 @@ function add_projectile(pos, vel)
     add(bodies, p)
 end
 
+function out_of_bounds(pos, tl, br)
+    return pos.x < tl.x or pos.x > br.x or pos.y < tl.y or pos.y > br.y
+end
+
 function projectile_should_die(proj)
-    local p = proj.pos
-    return p.x < world_tl.x or p.x > world_br.x or
-           p.y < world_tl.y or p.y > world_br.y
+    return out_of_bounds(proj.pos, world_tl - makevec2d(1, 1), world_br + makevec2d(1, 1))
 end
 
 function remove_dead_projectiles()
@@ -51,6 +53,7 @@ function remove_dead_projectiles()
         end
    end
 end
+
 
 function add_fragment(pos, vel, mass, radius)
     local fragment_body = make_body(pos)
@@ -159,7 +162,7 @@ function add_player_body(player, pos, vel)
     return body
 end
 
-function add_player(playeridx, sprite)
+function add_player(playeridx, sprite, fg_color, bg_color)
     local player = {
         body = nil,
         index = playeridx,
@@ -167,7 +170,9 @@ function add_player(playeridx, sprite)
         xdown = false,
         sprite = sprite,
         alive = true,
-        wins = 0
+        wins = 0,
+        fg_color = fg_color,
+        bg_color = bg_color
     }
 
     add(players, player)
@@ -217,8 +222,8 @@ function calculate_recoil(body, shootdir)
     local u = body.vel:unit() * -1
     local v = shootdir:unit()
     local dot = u.x * v.x + u.y * v.y
-    printh(dot)
-    return -recoil_strength * v * (-2.5 * dot + 3.5)
+    local braking_coefficient = -2.5 * dot + 3.5
+    return -recoil_strength * v * braking_coefficient
 end
 
 local shoot_strength = 5
@@ -432,6 +437,82 @@ function draw_projectile(body)
         0.5, 0.5, cx < 0, cy > 0)
 end
 
+function draw_aiming_arrows(player)
+    local s = screen_space(player.body.pos)
+    local d = screen_space(player.controldir * 0.8)
+    if player.controldir.x != 0 and player.controldir.y != 0 then
+        sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
+        -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    elseif player.controldir.x != 0 then
+        sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
+        -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    elseif player.controldir.y != 0 then
+        sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
+        -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
+    end
+end
+
+function integer_digits(num)
+    local count = 0
+    num = flr(num)
+    while num != 0 do
+        num -= num % 10
+        num /= 10
+        count += 1
+    end
+    return count
+end
+
+local diagonal_ob_arrow_x = 88
+local diagonal_ob_arrow_y = 24
+local vertical_ob_arrow_x = 96
+local vertical_ob_arrow_y = 24
+local horizontal_ob_arrow_x = 104
+local horizontal_ob_arrow_y = 24
+
+function draw_out_of_bounds_ui(player)
+    if not out_of_bounds(player.body.pos, world_tl, world_br) then return end
+
+    local px = player.body.pos.x
+    local py = player.body.pos.y
+    local spritex = 0 
+    local spritey = 0 
+
+    local sprite_size = 8
+    local wl_sprite_size = sprite_size / world_scale
+
+    if px > world_tl.x and px < world_br.x then -- vertical
+        spritex = vertical_ob_arrow_x
+        spritey = vertical_ob_arrow_y
+    elseif py > world_tl.y and py < world_br.y then --horizontal
+        spritex = horizontal_ob_arrow_x
+        spritey = horizontal_ob_arrow_y
+    else -- diagonal
+        spritex = diagonal_ob_arrow_x
+        spritey = diagonal_ob_arrow_y
+    end
+
+    local w = wl_sprite_size / 2
+    if     px < world_tl.x + w then px = world_tl.x + w
+    elseif px > world_br.x - w then px = world_br.x - w end
+    if     py < world_tl.y + w then py = world_tl.y + w
+    elseif py > world_br.y - w then py = world_br.y - w end
+
+    
+    
+    local dist = (makevec2d(px, py) - player.body.pos):size()
+    local max_dist = 48
+    local sz = ceil(map(clamp(dist, 0, max_dist), 0, max_dist, 8, 3))
+
+    local c = screen_space(makevec2d(px, py))
+    local s = c - makevec2d(sz, sz) / 2
+
+    pal(12, player.fg_color)
+    pal(1, player.bg_color)
+    sspr(spritex, spritey, 8, 8, s.x, s.y, sz, sz, px > 0, py > 0)
+    pal()
+end
+
 function draw_winner()
     assert(winner != nil)
 
@@ -443,7 +524,7 @@ function draw_winner()
     for i = 1, winner.wins do
         spr(13, lx, y)
         lx += star_width
-    end 
+    end
 end
 
 function _draw()
@@ -478,24 +559,16 @@ function _draw()
 
         -- draw aiming arrows
         for _, player in ipairs(players) do
-            local s = screen_space(player.body.pos)
-            local d = screen_space(player.controldir * 0.8)
-            if player.controldir.x != 0 and player.controldir.y != 0 then
-                sspr(72, 4, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0, player.controldir.y < 0)
-                -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-            elseif player.controldir.x != 0 then
-                sspr(72, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, player.controldir.x < 0)
-                -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-            elseif player.controldir.y != 0 then
-                sspr(76, 0, 4, 4, s.x + d.x - 1, s.y + d.y - 1, 4, 4, false, player.controldir.y < 0)
-                -- line(s.x, s.y, s.x + d.x, s.y + d.y, 7)
-            end
+            draw_aiming_arrows(player)
+            draw_out_of_bounds_ui(player)
         end
 
         -- draw stars above winner
         if winner != nil then
             draw_winner()
         end
+
+
     end
 end
 
@@ -524,13 +597,13 @@ __gfx__
 000000000dddd6600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000dd66000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c100000000000000000000
-000000000099990000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc100000006600000000000
-00000000099944900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccc100000060060000000000
-00000000094499900000000000000000000000000000000000000000000000000000000000000000000000000000000000000000ccc100000606006000000000
-000000000449944000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cc100000600606000000000
-0000000004444440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c100000060060000000000
-00000000004444000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006600000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000099990000000000000000000000000000000000000000000000000000000000000000000000000000ccc100000cc0000000c1000006600000000000
+00000000099944900000000000000000000000000000000000000000000000000000000000000000000000000ccc100000cccc00000cc1000060060000000000
+00000000094499900000000000000000000000000000000000000000000000000000000000000000000000000cc100000cccccc000ccc1000606006000000000
+00000000044994400000000000000000000000000000000000000000000000000000000000000000000000000c1000000111111000ccc1000600606000000000
+00000000044444400000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000cc1000060060000000000
+000000000044440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c1000006600000000000
 __gff__
 0000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000

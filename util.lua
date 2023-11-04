@@ -36,6 +36,12 @@ function map(val, old_min, old_max, min, max)
     return lerp(t, min, max)
 end
 
+function clamp(val, min, max)
+    if val < min then return min end
+    if val > max then return max end
+    return val
+end
+
 function random_btwn(min, max)
     return rnd(max - min) + min
 end
