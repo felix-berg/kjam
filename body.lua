@@ -1,4 +1,4 @@
-local gravity_constant = 0.2
+local gravity_constant = 10
 
 local bodymt = {}
 bodymt.__index = bodymt;
@@ -27,6 +27,7 @@ function bodymt:add_force(force)
 end
 
 function bodymt:update(dt)
+    printh(self.acc)
     self.vel += self.acc * dt
     self.pos += self.vel * dt
     self.acc:set(0, 0)

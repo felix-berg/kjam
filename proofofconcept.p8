@@ -6,20 +6,13 @@ __lua__
 #include body.lua
 #include util.lua
 
-local world = {
-    bl = makevec2d(-1, -1),
-    size = makevec2d(2, 2)
-}
+local world_scale = 8
+local world_size = 128 / world_scale
+local world_tl = makevec2d(-world_size, -world_size) / 2
+local world_br = makevec2d( world_size,  world_size) / 2
 
 function screen_space(pos)
-    return makevec2d(
-        map(pos.x, world.bl.x, world.bl.x + world.size.x, 0, screen.width),
-        map(pos.y, world.bl.y + world.size.y, world.bl.y, 0, screen.height)
-    )
-end
-
-function screen_space_scale(val)
-    return map(val, 0, world.size.x, 0, screen.width)
+    return pos * world_scale
 end
 
 local static_bodies = {}
@@ -27,23 +20,27 @@ local bodies = {}
 local projectiles = {}
 
 bodies[1] = make_body(
-    makevec2d(-0.5, -0.5), 
-    makevec2d(-0.5, 0.5), 
-    0.5, 0.04)
+    makevec2d(-4, -4), 
+    makevec2d(-4,  4), 
+    4, 0.32)
 
 static_bodies[1] = make_body(
     makevec2d(0, 0), 
     makevec2d(0, 0),
-    2, 0.1)
+    16, 0.8)
 
 function gamepad_dir()
     local v = makevec2d(0, 0)
-    if btn(controls.left) then v.x = -1 end
+    if btn(controls.left) then v.x += -1 end
     if btn(controls.right) then v.x += 1 end
-    if btn(controls.down) then v.y = -1 end
-    if btn(controls.up) then v.y += 1 end
+    if btn(controls.down) then v.y += 1 end
+    if btn(controls.up) then v.y += -1 end
     if v.x == 0 and v.y == 0 then return v end
     return v:unit()
+end
+
+function _init()
+    camera(-64, -64)
 end
 
 local dt = 1 / 60
@@ -65,48 +62,41 @@ function _update60()
     local control_dir = gamepad_dir()
     if btnp(controls.x) then
         if control_dir.x != 0 or control_dir.y != 0 then
-            bodies[1]:add_force(control_dir * (-10))
+            bodies[1]:add_force(control_dir * (-400))
             projectiles[#projectiles + 1] = make_body(
-                bodies[1].pos, control_dir * 0.01, 0, 0.001
+                bodies[1].pos, control_dir * 0.1, 0, 0.1
             )
         end
     end
 
     for i, proj in ipairs(projectiles) do
         proj.pos += proj.vel
-        if proj.pos.x < world.bl.x then 
+        if proj.pos.x < world_tl.x or
+           proj.pos.y < world_tl.y or
+           proj.pos.x > world_br.x or
+           proj.pos.y > world_br.y then 
             deli(projectiles, i)
         end
-        if proj.pos.x > world.bl.x + world.size.x then
-            deli(projectiles, i)
-        end
-    end
-
-    printh(#projectiles)
-    function bodymt:update(dt)
-        self.vel += self.acc * dt
-        self.pos += self.vel * dt
-        self.acc:set(0, 0)
     end
 end
 
 function _draw() 
     cls()
     for _, v in ipairs(static_bodies) do
-        local s = screen_space(v.pos)
-        local r = screen_space_scale(v.radius)
+        local s = v.pos * world_scale
+        local r = v.radius * world_scale
         circfill(s.x, s.y, r)
     end
     
     for _, v in ipairs(bodies) do
-        local s = screen_space(v.pos)
-        local r = screen_space_scale(v.radius)
+        local s = v.pos * world_scale
+        local r = v.radius * world_scale
         circfill(s.x, s.y, r)
     end
 
     for _, p in ipairs(projectiles) do
-        local s = screen_space(p.pos)
-        local r = screen_space_scale(p.radius)
+        local s = p.pos * world_scale
+        local r = p.radius * world_scale
         circfill(s.x, s.y, r)
     end
 end
