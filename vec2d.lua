@@ -53,6 +53,10 @@ function vecmt.__div(a, b)
     end
 end
 
+-- function vecmt:__eq(a, b)
+--     return a.x == b.x and a.y == b.y
+-- end
+
 function vecmt:set(x, y)
     self.x = x
     self.y = y
