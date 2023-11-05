@@ -4,6 +4,7 @@ __lua__
 
 #include vec2d.lua
 #include body.lua
+#include particle.lua
 #include util.lua
 #include pausescreen.lua
 
@@ -24,7 +25,7 @@ local bodies = {}
 -- objects with references to physics bodies
 local players = {}
 
-local projectile_mass = 0.1
+local projectile_mass = 1.5
 local projectile_radius = 0.2
 function add_projectile(pos, vel)
     local p = make_body(pos)
@@ -43,7 +44,7 @@ function out_of_bounds(pos, tl, br)
 end
 
 function projectile_should_die(proj)
-    return out_of_bounds(proj.pos, world_tl - makevec2d(1, 1), world_br + makevec2d(1, 1))
+    return out_of_bounds(proj.pos, world_tl - (world_br - world_tl) * 0.25, world_br + (world_br - world_tl) * 0.25)
 end
 
 function remove_dead_projectiles()
@@ -78,14 +79,14 @@ function generate_fragments(body, fragment_count)
     local mass = body.mass / (fragment_count * mass_falloff)
     local radius = radius_multiplier * body.radius / fragment_count 
     
-    local min_dist = radius
+    local min_dist = radius + body.radius
 
     local da = 1 / fragment_count
     for i = 1, fragment_count do
         local angle = da * i
         
         angle += random_btwn(-angle_spread, angle_spread)
-        dist = random_btwn(min_dist, fragment_max_spawn_distance)
+        dist = min_dist -- random_btwn(min_dist, fragment_max_spawn_distance)
 
         local angle_vec = makevec2d(cos(angle), sin(angle))
         angle_vec:normalize()
@@ -98,12 +99,38 @@ function generate_fragments(body, fragment_count)
     end
 end
 
+function explode(body)
+    local colors = {5, 5, 8, 8, 9, 9, 10, 10}
+    for i = 1, 8 do
+        local pos = body.pos + makevec2d(random_btwn(-0.5, 0.5), random_btwn(-0.5, 0.5))
+        make_particle(PARTICLE_SMOKE, colors[i], pos, makevec2d(random_btwn(-2, 2), random_btwn(-2, 2)), random_btwn(30, 90))
+    end
+end
+
 function handle_body_collision(b1, b2)
     if (b1.type != SUN) del(bodies, b1)
     if (b2.type != SUN) del(bodies, b2)
 
     if (b1.type == PLANET and b2.type != SUN) generate_fragments(b1, 3)
     if (b2.type == PLANET and b1.type != SUN) generate_fragments(b2, 3)
+
+    if b1.type == SUN then
+        local dir = b2.pos - b1.pos
+        local spread = 2
+        dir:normalize()
+        for i = 1, 16 do
+            local vel = dir * random_btwn(4, 11)
+            vel += makevec2d(random_btwn(-spread, spread), random_btwn(-spread, spread))
+            make_particle(PARTICLE_SPARK, random_btwn(8, 10), b1.pos, vel, 60)
+        end
+    end
+
+    if b1.type == PLANET and b2.type != SUN then
+        explode(b1)
+    end
+    if b2.type == PLANET and b1.type != SUN then
+        explode(b2)
+    end
 end
 
 function find_player(body)
@@ -143,7 +170,7 @@ function update_collisions()
     end
 end
 
-local player_mass = 4
+local player_mass = 6
 local player_radius = 0.32
 function add_player_body(player, pos, vel)
     local body = make_body(pos)
@@ -226,7 +253,7 @@ function calculate_recoil(body, shootdir)
     return -recoil_strength * v * braking_coefficient
 end
 
-local shoot_strength = 5
+local shoot_strength = 6
 function shoot_projectile(player, shootdir)
     if (shootdir.x == 0 and shootdir.y == 0) return
 
@@ -235,7 +262,8 @@ function shoot_projectile(player, shootdir)
 
     -- offset projectile position by player radius in the shooting direction
     local proj_pos = body.pos + shootdir:unit() * (body.radius * 2.01) 
-    add_projectile(proj_pos, body.vel + shootdir * shoot_strength)
+    local vel = shootdir * shoot_strength 
+    add_projectile(proj_pos, vel)
 end
 
 function update_player_controls()
@@ -315,15 +343,16 @@ function init_level(level)
         local b2 = add_player_body(players[2], makevec2d( 5,  5), makevec2d(0, 0))
         b1.vel = tangent_vel(b1, sun)
         b2.vel = tangent_vel(b2, sun)
-    -- elseif level == 4 then
-    --     -- two suns
+    elseif level == 4 then
+        -- two suns
         
-    --     local sun1 = add_sun(makevec2d( 4, 0), 16, 0.8)
-    --     local sun2 = add_sun(makevec2d(-4, 0), 16, 0.8)
+        local sun1 = add_sun(makevec2d( 4, 0), 16, 0.8)
+        local sun2 = add_sun(makevec2d(-4, 0), 16, 0.8)
 
-    --     local player1 = add_player(makevec2d(0, 0), makevec2d(5, 6), 0)
-    --     -- local player2 = add_player(makevec2d( 5,  5), makevec2d(0, 0), 1)
-    --     -- player1.body.vel = tangent_vel(player1.body, sun)
+        add_player_body(players[1], makevec2d(-1, -1), makevec2d(-2.2, -3.5), 0)
+        add_player_body(players[2], makevec2d(1, 1), makevec2d(2.2, 3.5), 0)
+        -- local player2 = add_player(makevec2d( 5,  5), makevec2d(0, 0), 1)
+        -- player1.body.vel = tangent_vel(player1.body, sun)
     end
 end
 
@@ -331,6 +360,11 @@ end
 function _init()
     camera(-64, -64)
     initialize_pause_screen()
+
+    -- add_player(0, 1)
+    -- add_player(1, 1)
+
+    -- init_level(2)
 end
 
 local gameover_t = 0
@@ -348,7 +382,7 @@ function update_endgame()
             paused = true
             players = {}
         else
-            init_level(flr(rnd(3)) + 1)
+            init_level(4)
         end
 
         winner = nil
@@ -372,14 +406,25 @@ local prev_num_bodies = 0
 function _update60()
     if paused then
         if update_pause_screen() then
-            init_level(flr(rnd(3)) + 1)
+            init_level(4)
             paused = false
         end
     else
         update_player_controls()
         remove_dead_projectiles()
         update_collisions()
-        
+
+        -- projectile trails
+        for _, body in ipairs(bodies) do
+            if body.type == PROJECTILE then
+                local dir = body.vel * -0.2
+                dir:normalize()
+                local spread = 1
+                local vel = dir + makevec2d(random_btwn(-spread, spread), random_btwn(-spread, spread))
+                make_particle(PARTICLE_SPARK, random_btwn(9, 11), body.pos, vel, random_btwn(10, 16))
+            end
+        end
+    
         local players_alive = 0
         for _, player in ipairs(players) do
             players_alive = player.alive and players_alive + 1 or players_alive
@@ -401,9 +446,48 @@ function _update60()
             prev_num_bodies = #bodies
         end
     end
+    update_particles()
 end
 
 ---draw---
+
+-- function draw_background()
+--     -- fillp(8)
+--     for j = -64, 64 do
+--         for i = -64, 64 do
+--             if 10 * sin(i * -0.005 + 0.1) + j + sin(j * 0.1) + 40 > 0.5 and
+--                10 * sin(i * -0.002 + 0.1) + j + sin(j * 0.07) - 40 < 0.5 then
+--                 pset(i, j, 1)
+--             end
+--         end
+--     end
+
+--     -- for j = -10, 10 do
+--     --     for i = -10, 10 do
+--     --         x = t() * 0.1
+--     --         y = t() * -0.064
+--     --         local tile_index = (290.257 * ceil((i - x)) + 248.013 * ceil((j - y))) % 16
+--     --         x = x - flr(x)
+--     --         y = y - flr(y)
+--     --         local tile_x = tile_index % 4
+--     --         local tile_y = flr(tile_index / 4)
+--     --         spr(64 + tile_y * 16 + tile_x, (i + x) * world_scale, (j + y) * world_scale)
+--     --     end
+--     -- end
+--     -- pal(7, 6)
+--     -- for j = -10, 10 do
+--     --     for i = -10, 10 do
+--     --         x = t() * 0.5
+--     --         y = t() * -0.02
+--     --         local tile_index = (279.336 * ceil((i - x)) + 713.622 * ceil((j - y))) % 16
+--     --         x = x - flr(x)
+--     --         y = y - flr(y)
+--     --         local tile_x = tile_index % 4
+--     --         local tile_y = flr(tile_index / 4)
+--     --         spr(64 + tile_y * 16 + tile_x, (i + x) * world_scale, (j + y) * world_scale)
+--     --     end
+--     -- end
+-- end
 
 function draw_sun(x, y)
     for i = -7, 7 do
@@ -551,11 +635,12 @@ function draw_winner()
 end
 
 function _draw()
+    cls()
+    fillp()
+
     if paused then
         draw_pause_screen()
     else
-        cls(1)
-        fillp()
         palt(0, true)
 
         -- draw bodies
@@ -580,6 +665,8 @@ function _draw()
             end
         end
 
+        draw_particles()
+
         -- draw aiming arrows
         for _, player in ipairs(players) do
             if player.alive then
@@ -587,7 +674,7 @@ function _draw()
                 draw_out_of_bounds_ui(player)
             end
         end
-
+        
         -- draw stars above winner
         if winner != nil then
             draw_winner()
@@ -629,6 +716,37 @@ __gfx__
 00000000044994400000000000000000000000000000000000000000000000000000000000000000000000000c1000000111111000ccc1000600606000000000
 00000000044444400000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000cc1000060060000000000
 000000000044440000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c1000006600000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000000000d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000000000000000d000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __gff__
 0000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
