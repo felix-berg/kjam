@@ -10,8 +10,6 @@ local UNAVAILABLE_SPRITE = 62
 local pause_screen_players = {} 
 local num_players = 2
 
-local player_wins = {0, 0, 0, 0}
-
 local player_marker_colors = { 8, 12, 11, 14 }
 local player_marker_shadow_colors = { 2, 1, 3, 13 }
 
@@ -103,8 +101,8 @@ function draw_pause_screen()
         cursor(leftx + 4, topy - 10)
         print("p" .. player.player_index + 1, 7)
 
-        cursor(leftx + 3, topy + box_height * 4 + 3)
-        print(player_wins[playeridx] .. "★", 10)
+        -- cursor(leftx + 3, topy + box_height * 4 + 3)
+        -- print(player_wins[playeridx] .. "★", 10)
 
         local tlx = leftx 
         local tly = topy
