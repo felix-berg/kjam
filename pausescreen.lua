@@ -74,9 +74,9 @@ function draw_pause_screen()
     cls()
     
     cursor(-48, 52)
-    print("press ❎ to choose planet")
+    print("press 🅾️ to choose planet")
     cursor(-48, 60)
-    print("press 🅾️ to begin")
+    print("press ❎ to begin")
     
     local slot_width = 128 / (num_players + 1)
     
