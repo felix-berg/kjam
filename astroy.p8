@@ -1,6 +1,8 @@
 pico-8 cartridge // http://www.pico-8.com
 version 41
 __lua__
+-- astroy
+-- by felix and mathias
 
 #include vec2d.lua
 #include body.lua
@@ -8,7 +10,7 @@ __lua__
 #include util.lua
 #include pausescreen.lua
 
-local paused = true
+game_state = "title"
 
 local sounds = {
     projectile = 0,
@@ -491,6 +493,7 @@ end
 function _init()
     camera(-64, -64)
     initialize_pause_screen()
+    init_starfield()
 end
 
 local gameover_t = 0
@@ -505,7 +508,7 @@ function update_endgame()
         gameover_t = 0
         
         if winner != nil and winner.wins >= max_wins then
-            paused = true
+            game_state = "title"
             players = {}
             sfx(sounds.game_win_lead)
             sfx(sounds.game_win_bass)
@@ -533,10 +536,10 @@ end
 
 local prev_num_bodies = 0
 function _update60()
-    if paused then
+    if game_state == "title" then
         if update_pause_screen() then
             load_random_level()
-            paused = false
+            game_state = "level"
         end
     else
         update_player_controls()
@@ -576,6 +579,7 @@ function _update60()
         -- end
     end
     update_particles()
+    update_starfield()
 end
 
 ---draw---
@@ -736,11 +740,61 @@ function draw_winner()
     end
 end
 
+local star_particles = {}
+function init_starfield()
+    local colors = {1, 6, 7}
+    for i = 1, 100 do
+        local x = flr(random_btwn(-64, 64))
+        local y = flr(random_btwn(-64, 64))
+        local r = flr(rnd(3))
+        local particle = {
+            pos = makevec2d(x, y),
+            old = makevec2d(x, y - (r + 1) * 0.1),
+            col = colors[r],
+        }
+    
+        add(star_particles, particle)
+    end
+end
+
+function update_starfield()
+    for i = #star_particles, 1, -1 do
+        local particle = star_particles[i]
+        local vel = particle.pos - particle.old
+        particle.old = particle.pos
+        particle.pos += vel
+        -- if particle.pos.x < -64 then
+        --     particle.pos.x += 128
+        --     particle.old.x += 128
+        -- end
+        -- if particle.pos.x > 64 then
+        --     particle.pos.x -= 128
+        --     particle.old.x -= 128
+        -- end
+        -- if particle.pos.y < -64 then
+        --     particle.pos.y += 128
+        --     particle.old.y += 128
+        -- end
+        if particle.pos.y > 64 then
+            particle.pos.y -= 128
+            particle.old.y -= 128
+        end
+    end
+end
+
+function draw_starfield()
+    for i, particle in pairs(star_particles) do
+        line(particle.old.x, particle.old.y, particle.pos.x, particle.pos.y, particle.col)
+    end
+end
+
 function _draw()
     cls()
     fillp()
 
-    if paused then
+    draw_starfield()
+
+    if game_state == "title" then
         draw_pause_screen()
     else
         palt(0, true)
@@ -783,8 +837,6 @@ function _draw()
         if winner != nil then
             draw_winner()
         end
-
-
     end
 end
 

@@ -71,11 +71,10 @@ local not_considering_color = 7
 local picked_color = 9
 
 function draw_pause_screen()
-    cls()
-    
-    cursor(-48, 52)
+    color(7)
+    cursor(-48, 40)
     print("press 🅾️ to choose planet")
-    cursor(-48, 60)
+    cursor(-48, 50)
     print("press ❎ to begin")
     
     local slot_width = 128 / (num_players + 1)
