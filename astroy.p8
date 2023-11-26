@@ -571,11 +571,11 @@ function _update60()
         update_bodies()
         
         -- if #bodies != prev_num_bodies then
-        --     printh("World updated, bodies:")
-        --     for _, body in ipairs(bodies) do
-        --         printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
-        --     end
-        --     prev_num_bodies = #bodies
+		-- 	printh("World updated, bodies:")
+		-- 	for _, body in ipairs(bodies) do
+		-- 		printh(" - Pos: " .. body.pos.x .. ", " .. body.pos.y .. ", radius: " .. body.radius .. ", mass: " .. body.mass .. ", type: " .. body_type_string(body))
+		-- 	end
+		-- 	prev_num_bodies = #bodies
         -- end
     end
     update_particles()
@@ -764,16 +764,16 @@ function update_starfield()
         particle.old = particle.pos
         particle.pos += vel
         -- if particle.pos.x < -64 then
-        --     particle.pos.x += 128
-        --     particle.old.x += 128
+		-- 	particle.pos.x += 128
+		-- 	particle.old.x += 128
         -- end
         -- if particle.pos.x > 64 then
-        --     particle.pos.x -= 128
-        --     particle.old.x -= 128
+		-- 	particle.pos.x -= 128
+		-- 	particle.old.x -= 128
         -- end
         -- if particle.pos.y < -64 then
-        --     particle.pos.y += 128
-        --     particle.old.y += 128
+		-- 	particle.pos.y += 128
+		-- 	particle.old.y += 128
         -- end
         if particle.pos.y > 64 then
             particle.pos.y -= 128
