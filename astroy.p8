@@ -4,8 +4,6 @@ __lua__
 -- astroy
 -- by felix and mathias
 
-#include util.lua
-
 game_state = "title"
 
 sounds = {
