@@ -51,6 +51,60 @@ function _init()
 	init_starfield()
 end
 
+function transition_fsm(state)
+	if game_state == "title" then
+		if state == "level" then
+			game_state = "level"
+
+			local plr1 = menu_players[0]
+			local plr2 = menu_players[1]
+			add_player(plr1.id, characters[plr1.selection], 8, 2)
+			add_player(plr2.id, characters[plr2.selection], 12, 1)
+
+			init_level(1)
+		end
+	elseif game_state == "level" then
+		if state == "title" then
+			game_state = "title"
+
+			players = {}
+		end
+	end
+end
+
+function update_fsm()
+	if game_state == "title" then
+		update_selection_screen()
+	elseif game_state == "level" then
+		update_game()
+	end
+end
+
+-- called by pico-8 60 times per sec
+function _update60()
+	update_fsm()
+	update_particles()
+	update_starfield()
+end
+
+-- called once per frame by pico-8
+function _draw()
+	cls()
+	fillp()
+
+	draw_starfield()
+	draw_particles()
+
+	if game_state == "title" then
+		draw_selection_screen()
+	elseif game_state == "level" then
+		draw_game()
+	end
+end
+
+-->8
+-- game
+
 gameover_t = 0
 winner = nil
 max_wins = 5
@@ -62,8 +116,7 @@ function endgame_logic()
 		gameover_t = 0
 		
 		if winner != nil and winner.wins >= max_wins then
-			game_state = "title"
-			players = {}
+			transition_fsm("title")
 			sfx(sounds.game_win_lead)
 			sfx(sounds.game_win_bass)
 		else
@@ -87,98 +140,73 @@ function endgame_logic()
 	end
 end
 
--- called by pico-8 60 times per sec
-function _update60()
-	if game_state == "title" then
-		update_selection_screen()
-		-- if update_pause_screen() then
-		-- 	load_random_level()
-		-- 	game_state = "level"
-		-- end
-	else
-		-- update_player_controls()
+function update_game()
+	-- update_player_controls()
 
-		-- remove_dead_projectiles()
-		-- update_collisions()
+	-- remove_dead_projectiles()
+	-- update_collisions()
 
-		-- projectile trails
-		for _, body in ipairs(bodies) do
-			if body.type == PROJECTILE then
-				particle_projectile_trail(body.x, body.y)
-			end
+	-- projectile trails
+	for _, body in ipairs(bodies) do
+		if body.type == PROJECTILE then
+			particle_projectile_trail(body.x, body.y)
 		end
-
-		for player in all(players) do
-			update_player(player)
-		end
-	
-		local players_alive = 0
-		for player in all(players) do
-			players_alive = player.alive and players_alive + 1 or players_alive
-		end
-
-		if players_alive <= 1 then
-			endgame_logic()
-		end
-
-		for player in all(players) do
-			if (player.alive) update_out_of_bounds_time(player)
-		end
-
-		update_bodies()
 	end
-	update_particles()
-	update_starfield()
+
+	for player in all(players) do
+		update_player(player)
+	end
+
+	local players_alive = 0
+	for player in all(players) do
+		players_alive = player.alive and players_alive + 1 or players_alive
+	end
+
+	if players_alive <= 1 then
+		endgame_logic()
+	end
+
+	for player in all(players) do
+		if (player.alive) update_out_of_bounds_time(player)
+	end
+
+	update_bodies()
 end
 
--- called once per frame by pico-8
-function _draw()
-	cls()
-	fillp()
-
-	draw_starfield()
-	
-	draw_particles()
-
-	if game_state == "title" then
-		draw_selection_screen()
-	else
-
-		-- draw bodies
-		for body in all(bodies) do
-			if body.type == PLANET then
-				if fget(body.sprite, 0) then -- fragment sprite flag
-					local tile = flr(body.rand * 4)
-					local tile_x = tile % 2
-					local tile_y = flr(tile / 2)
-					sspr((body.sprite % 16) * 8 + tile_x * 4, flr(body.sprite / 16) * 8 + tile_y * 4, 4, 4, body.x - 3, body.y - 3)
-				elseif fget(body.sprite, 1) then -- big sprite flag
-					spr(body.sprite, body.x - 6, body.y - 6, 2, 2)
-				else
-					spr(body.sprite, body.x - 3, body.y - 3)
-				end
-			elseif body.type == PROJECTILE then
-				-- draw_projectile(body)
-				spr(body.sprite, body.x - 3, body.y - 3)
-			elseif body.type == SUN then
-				draw_sun(body.x, body.y)
+function draw_game()
+	-- draw bodies
+	for body in all(bodies) do
+		if body.type == PLANET then
+			if fget(body.sprite, 0) then -- fragment sprite flag
+				local tile = flr(body.rand * 4)
+				local tile_x = tile % 2
+				local tile_y = flr(tile / 2)
+				sspr((body.sprite % 16) * 8 + tile_x * 4, flr(body.sprite / 16) * 8 + tile_y * 4, 4, 4, body.x - 3, body.y - 3)
+			elseif fget(body.sprite, 1) then -- big sprite flag
+				spr(body.sprite, body.x - 6, body.y - 6, 2, 2)
 			else
-				circ(body.x, body.y, body.radius)
+				spr(body.sprite, body.x - 3, body.y - 3)
 			end
+		elseif body.type == PROJECTILE then
+			spr(body.sprite, body.x - 3, body.y - 3)
+		elseif body.type == SUN then
+			draw_sun(body.x, body.y)
+		else
+			circ(body.x, body.y, body.radius)
 		end
+	end
 
-		-- draw aiming arrows
-		for player in all(players) do
-			if player.alive then
-				draw_aiming_arrows(player)
-				draw_out_of_bounds_ui(player)
-			end
+	-- draw aiming arrows
+	for player in all(players) do
+		if player.alive then
+			draw_aiming_arrows(player)
+			draw_out_of_bounds_ui(player)
 		end
-		
-		-- draw stars above winner
-		if winner != nil then
-			draw_winner()
-		end
+	end
+	
+	-- draw stars above winner
+	if winner != nil then
+		draw_winner()
 	end
 end
 
@@ -805,16 +833,6 @@ function init_selection_screen()
 	end
 end
 
-function begin_game()
-	local plr1 = menu_players[0]
-	local plr2 = menu_players[1]
-	add_player(plr1.id, characters[plr1.selection], 8, 2)
-	add_player(plr2.id, characters[plr2.selection], 12, 1)
-
-	game_state = "level"
-	init_level(1)
-end
-
 function begin_countdown()
 	menu_countdown = 3
 	menu_last_countdown_time = t()
@@ -826,7 +844,7 @@ function advance_countdown()
 	menu_last_countdown_time = t()
 	particle_bubble(64, 96, 10, 2, 7)
 
-	if (menu_countdown == 0) begin_game()
+	if (menu_countdown == 0) transition_fsm("level")
 end
 
 function update_selection_screen()
@@ -997,37 +1015,6 @@ function draw_sun(x, y)
 	end
 end
 
--- local vertical_proj = 25
--- local horizontal_proj = 41
--- local diagonal_proj = 57
--- function draw_projectile(body)
--- 	-- local dir = body.vel:unit()
-
--- 	-- local cx = nil
--- 	-- local cy = nil
--- 	-- local closest_dot = -20000
--- 	-- for x = -1, 1 do
--- 	-- 	for y = -1, 1 do 
--- 	-- 		if x != 0 or y != 0 then
--- 	-- 			local u = makevec2d(x, y):unit()
--- 	-- 			local dot = dir.x * u.x + dir.y * u.y
--- 	-- 			if dot > closest_dot then
--- 	-- 				cx = x
--- 	-- 				cy = y
--- 	-- 				closest_dot = dot
--- 	-- 			end
--- 	-- 		end
--- 	-- 	end
--- 	-- end
-
--- 	-- local sprite = 1
--- 	-- if abs(cx) == abs(cy) then sprite = diagonal_proj 
--- 	-- elseif abs(cx) > abs(cy) then sprite = horizontal_proj
--- 	-- else sprite = vertical_proj end
-
--- 	spr(body.sprite, body.x - 3, body.y - 3)
--- end
-
 function draw_aiming_arrows(player)
 	local b = player.body
 
@@ -1054,17 +1041,6 @@ function draw_aiming_arrows(player)
 
 	pal()
 end
-
--- function integer_digits(num)
--- 	local count = 0
--- 	num = flr(num)
--- 	while num != 0 do
--- 		num -= num % 10
--- 		num /= 10
--- 		count += 1
--- 	end
--- 	return count
--- end
 
 local vertical_ob_arrow_x = 80
 local vertical_ob_arrow_y = 24
@@ -1166,18 +1142,6 @@ function update_starfield()
 		particle.prev_y = particle.y
 		particle.x += dx
 		particle.y += dy
-		-- if particle.pos.x < -64 then
-		-- 	particle.pos.x += 128
-		-- 	particle.old.x += 128
-		-- end
-		-- if particle.pos.x > 64 then
-		-- 	particle.pos.x -= 128
-		-- 	particle.old.x -= 128
-		-- end
-		-- if particle.pos.y < -64 then
-		-- 	particle.pos.y += 128
-		-- 	particle.old.y += 128
-		-- end
 		if particle.y > 128 then
 			particle.y -= 128
 			particle.prev_y -= 128
