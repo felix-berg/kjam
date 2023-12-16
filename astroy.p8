@@ -120,7 +120,7 @@ function endgame_logic()
 			sfx(sounds.game_win_lead)
 			sfx(sounds.game_win_bass)
 		else
-			load_random_level()
+			random_level()
 		end
 
 		winner = nil
@@ -215,6 +215,8 @@ end
 
 num_players = 2
 
+player_mass = 6
+
 shoot_delay = 0.3
 shoot_strength = 50
 recoil_strength = 280
@@ -230,7 +232,7 @@ players = {}
 
 function add_player_body(player, x, y)
 	local body = body_create(x, y)
-	body.mass = 6
+	body.mass = player_mass
 	body.radius = 2.5
 	body.type = PLANET
 	body.sprite = player.sprite
@@ -347,8 +349,8 @@ SUN = 3
 -- local STATIC = true
 
 function body_create(x, y)
-	x = x or 0 -- default pos
-	y = y or 0
+	x = x or 64 -- default pos
+	y = y or 64
 	local b = {
 		type = PLANET,
 		alive = true,
@@ -459,10 +461,8 @@ function update_bodies()
 
 			local dx = b2.x - b1.x
 			local dy = b2.y - b1.y
-
 			dx = dx >> 0x5
 			dy = dy >> 0x5
-
 			local dsq = dx*dx + dy*dy
 			local d = sqrt(dsq)
 
@@ -648,12 +648,86 @@ end
 
 NUM_LEVELS = 1
 
-function load_random_level()
-	printh("load random level")
+-- set the initial orbital velocities of the system
+function setup_bodies(body_dat)
+	local mass = 0
+	local comx = 0
+	local comy = 0
+
+	-- compute the center of mass of bodies
+	for bdat in all(body_dat) do
+		if #bdat == 0 then
+			bdat.mass = bdat.mass or (bdat.plr and player_mass or 1)
+			bdat.pos = bdat.pos or {64, 64}
+			
+			mass += bdat.mass
+			comx += bdat.pos[1] * bdat.mass
+			comy += bdat.pos[2] * bdat.mass
+		else
+			local m, cx, cy = setup_bodies(bdat)
+			mass += m
+			comx += cx
+			comy += cy
+		end
+	end
+	comx /= mass
+	comy /= mass
+
+	-- init bodies
+	for bdat in all(body_dat) do
+		if #bdat == 0 then
+			local m = mass - bdat.mass
+
+			local dx = comx - bdat.pos[1]
+			local dy = comy - bdat.pos[2]
+			dx = dx >> 0x4
+			dy = dy >> 0x4
+			local dsq = dx*dx + dy*dy
+			local d = sqrt(dsq)
+
+			-- approximate distance to center of mass of all other bodies (excluding this one)
+			local dcsq = (dsq * mass / m)
+
+			-- eccentricity
+			local ecc = bdat.ecc or 0
+			-- velocity
+			-- magic number is sqrt(32)
+			local vel = 5.656854 * sqrt(gravity_constant * m * (d - d * ecc) / dcsq) -- thankyou kepler
+			local vx = -dy / d * vel
+			local vy =  dx / d * vel
+
+			if bdat.plr then
+				local b = add_player_body(players[bdat.plr], bdat.pos[1], bdat.pos[2])
+				b.mass = bdat.mass
+				b.dx = vx
+				b.dy = vy
+				-- b.dx = 8
+			else
+				local b = body_create(bdat.pos[1], bdat.pos[2])
+				b.type = bdat.typ or PLANET
+				b.static = bdat.fix or false
+				b.mass = bdat.mass or 1
+				b.radius = bdat.rad or 1
+				b.dx = vx
+				b.dy = vy
+			end
+		end
+	end
+
+	return mass, comx, comy
+end
+
+function random_level()
 	init_level(flr(rnd(NUM_LEVELS)) + 1)
 end
 
-function init_level(level)
+function init_level(lvl)
+	local ldat = level_dat[lvl]
+	if (not ldat) return
+
+	cls()
+	reset()
+
 	bodies = {}
 
 	for player in all(players) do
@@ -661,17 +735,19 @@ function init_level(level)
 		player.last_shot_t = time() + 1
 	end
 
-	if level == 1 then
-		-- two planets
-		local b1 = add_player_body(players[1], 32, 32)
-		local b2 = add_player_body(players[2], 96, 96)
+	setup_bodies(ldat.bodies)
 
-		-- local sun = add_sun(64, 64, 16, 0.8)
-		-- b1.dx = -4
-		-- b1.dy = 4
-		-- b1.vel = tangent_vel(b1, b2)
-		-- b2.vel = tangent_vel(b2, b1)
-	end
+	-- if level == 1 then
+	-- 	-- two planets
+	-- 	local b1 = add_player_body(players[1], 32, 32)
+	-- 	local b2 = add_player_body(players[2], 96, 96)
+
+	-- 	-- local sun = add_sun(64, 64, 16, 0.8)
+	-- 	-- b1.dx = -4
+	-- 	-- b1.dy = 4
+	-- 	-- b1.vel = tangent_vel(b1, b2)
+	-- 	-- b2.vel = tangent_vel(b2, b1)
+	-- end
 	-- elseif level == 2 then
 	-- 	-- sun and two planets
 		
@@ -795,6 +871,26 @@ function init_level(level)
 	-- 	green.sprite = 34
 	-- end
 end
+
+level_dat = {
+
+-- level 1
+[1] = {
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {32, 32}
+	},
+	{
+		plr = 2,
+		pos = {96, 96}
+	},
+
+	}
+}
+
+}
 
 -->8
 -- pause menu
