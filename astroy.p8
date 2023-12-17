@@ -61,7 +61,7 @@ function transition_fsm(state)
 			add_player(plr1.id, characters[plr1.selection], 8, 2)
 			add_player(plr2.id, characters[plr2.selection], 12, 1)
 
-			init_level(1)
+			random_level()
 		end
 	elseif game_state == "level" then
 		if state == "title" then
@@ -174,6 +174,13 @@ function update_game()
 end
 
 function draw_game()
+	-- draw bodies before
+	for body in all(bodies) do
+		if body.type == HOLE then
+			draw_black_hole(body.x, body.y, body.radius, true)
+		end
+	end
+
 	-- draw bodies
 	for body in all(bodies) do
 		if body.type == PLANET then
@@ -191,6 +198,8 @@ function draw_game()
 			spr(body.sprite, body.x - 3, body.y - 3)
 		elseif body.type == SUN then
 			draw_sun(body.x, body.y)
+		elseif body.type == HOLE then
+			draw_black_hole(body.x, body.y, body.radius, false)
 		else
 			circ(body.x, body.y, body.radius)
 		end
@@ -215,7 +224,7 @@ end
 
 num_players = 2
 
-player_mass = 6
+player_mass = 4
 
 shoot_delay = 0.3
 shoot_strength = 50
@@ -265,7 +274,7 @@ end
 
 function shoot_projectile(player)
 	local now = time()
-	-- if (now - player.last_shot_t < shoot_delay) return
+	if (now - player.last_shot_t < shoot_delay) return
 
 	player.last_shot_t = now
 
@@ -344,6 +353,7 @@ gravity_constant = 1
 PLANET = 1
 PROJECTILE = 2
 SUN = 3
+HOLE = 4
 
 -- local DYNAMIC = false
 -- local STATIC = true
@@ -489,8 +499,10 @@ function update_bodies()
 		local b1 = pair.first
 		local b2 = pair.second
 
-		if b1.type == SUN and b2.type == SUN then
+		if b1.type == SUN or b1.type == HOLE then
 			-- do nothing
+		elseif b2.type == HOLE then
+			body_destroy(b1)
 		elseif b2.type == SUN then
 			-- particle effects
 			local dx = b1.x - b2.x
@@ -646,79 +658,128 @@ end
 -->8
 -- levels
 
-NUM_LEVELS = 1
+num_levels = 6
 
--- set the initial orbital velocities of the system
-function setup_bodies(body_dat)
-	local mass = 0
+function body_data_com(body_dat, use_static_mass)
+	local static_mass = 0
+	local total_mass = 0
 	local comx = 0
 	local comy = 0
+	local static = false
 
 	-- compute the center of mass of bodies
 	for bdat in all(body_dat) do
+		if not static and bdat.static then
+			static = true
+			static_mass = 0
+			comx = 0
+			comy = 0
+		end
+
 		if #bdat == 0 then
-			bdat.mass = bdat.mass or (bdat.plr and player_mass or 1)
-			bdat.pos = bdat.pos or {64, 64}
-			
-			mass += bdat.mass
-			comx += bdat.pos[1] * bdat.mass
-			comy += bdat.pos[2] * bdat.mass
+			if (bdat.static) or (#bdat == 0 and not static) then
+				local m = bdat.mass or (bdat.plr and player_mass or 1)
+				static_mass += m
+				total_mass += m
+				comx += bdat.pos[1] * m
+				comy += bdat.pos[2] * m
+			end
 		else
-			local m, cx, cy = setup_bodies(bdat)
-			mass += m
-			comx += cx
-			comy += cy
+			local m, cx, cy, static = body_data_com(bdat)
+			if not static and static then
+				static = true
+				static_mass = 0
+				comx = 0
+				comy = 0
+			end
+			static_mass += m
+			total_mass += m
+			comx += cx * m
+			comy += cy * m
 		end
 	end
-	comx /= mass
-	comy /= mass
+	comx /= static_mass
+	comy /= static_mass
+
+	if (use_static_mass) total_mass = static_mass
+	return total_mass, comx, comy, static
+end
+
+-- create bodies from level body data, and set the initial orbital velocities
+function setup_bodies(body_dat, rel_x, rel_y)
+	local mass, comx, comy, static = body_data_com(body_dat, true)
 
 	-- init bodies
 	for bdat in all(body_dat) do
 		if #bdat == 0 then
-			local m = mass - bdat.mass
-
-			local dx = comx - bdat.pos[1]
-			local dy = comy - bdat.pos[2]
-			dx = dx >> 0x4
-			dy = dy >> 0x4
-			local dsq = dx*dx + dy*dy
-			local d = sqrt(dsq)
-
-			-- approximate distance to center of mass of all other bodies (excluding this one)
-			local dcsq = (dsq * mass / m)
-
-			-- eccentricity
-			local ecc = bdat.ecc or 0
-			-- velocity
-			-- magic number is sqrt(32)
-			local vel = 5.656854 * sqrt(gravity_constant * m * (d - d * ecc) / dcsq) -- thankyou kepler
-			local vx = -dy / d * vel
-			local vy =  dx / d * vel
-
+			local b
 			if bdat.plr then
-				local b = add_player_body(players[bdat.plr], bdat.pos[1], bdat.pos[2])
-				b.mass = bdat.mass
-				b.dx = vx
-				b.dy = vy
-				-- b.dx = 8
+				b = add_player_body(players[bdat.plr], bdat.pos[1], bdat.pos[2])
+				b.mass = bdat.mass or player_mass
 			else
-				local b = body_create(bdat.pos[1], bdat.pos[2])
-				b.type = bdat.typ or PLANET
-				b.static = bdat.fix or false
+				b = body_create(bdat.pos[1], bdat.pos[2])
+				b.type = bdat.type or PLANET
+				b.static = bdat.static or false
 				b.mass = bdat.mass or 1
-				b.radius = bdat.rad or 1
-				b.dx = vx
-				b.dy = vy
+				b.radius = bdat.radius or 1
+				b.sprite = bdat.sprite or 1
 			end
+			b.dx = rel_x
+			b.dy = rel_y
+			if not bdat.static and mass > b.mass then
+				local m = static and mass or mass - b.mass
+
+				local dx = comx - b.x
+				local dy = comy - b.y
+				dx = dx >> 0x4
+				dy = dy >> 0x4
+				local dsq = dx*dx + dy*dy
+				local d = sqrt(dsq)
+
+				-- approximate distance to center of mass of all other bodies (excluding this one)
+				local dc = d * mass / m
+
+				-- eccentricity
+				local ecc = bdat.ecc or 0
+				-- velocity
+				local vel = 8 * sqrt(gravity_constant * m * (d - d * ecc)) / dc -- thankyou kepler
+
+				b.dx += -dy / d * vel
+				b.dy +=  dx / d * vel
+			end
+		else
+			local asm_mass, asm_comx, asm_comy, asm_static = body_data_com(bdat)
+			local asm_vx = rel_x
+			local asm_vy = rel_y
+			if not asm_static and mass > asm_mass then
+				local m = static and mass or mass - asm_mass
+
+				local dx = comx - asm_comx
+				local dy = comy - asm_comy
+				dx = dx >> 0x4
+				dy = dy >> 0x4
+				local dsq = dx*dx + dy*dy
+				local d = sqrt(dsq)
+
+				-- approximate distance to center of mass of all other bodies (excluding this one)
+				local dc = d * mass / m
+
+				-- eccentricity
+				local ecc = bdat.ecc or 0
+				-- velocity
+				local vel = 8 * sqrt(gravity_constant * m * (d - d * ecc)) / dc -- thankyou kepler
+
+				asm_vx += -dy / d * vel
+				asm_vy +=  dx / d * vel
+
+			end
+			setup_bodies(bdat, asm_vx, asm_vy)
 		end
 	end
-
-	return mass, comx, comy
 end
 
 function random_level()
-	init_level(flr(rnd(NUM_LEVELS)) + 1)
+	init_level(flr(rnd(num_levels)) + 1)
 end
 
 function init_level(lvl)
@@ -735,113 +796,8 @@ function init_level(lvl)
 		player.last_shot_t = time() + 1
 	end
 
-	setup_bodies(ldat.bodies)
+	setup_bodies(ldat.bodies, 0, 0)
 
-	-- if level == 1 then
-	-- 	-- two planets
-	-- 	local b1 = add_player_body(players[1], 32, 32)
-	-- 	local b2 = add_player_body(players[2], 96, 96)
-
-	-- 	-- local sun = add_sun(64, 64, 16, 0.8)
-	-- 	-- b1.dx = -4
-	-- 	-- b1.dy = 4
-	-- 	-- b1.vel = tangent_vel(b1, b2)
-	-- 	-- b2.vel = tangent_vel(b2, b1)
-	-- end
-	-- elseif level == 2 then
-	-- 	-- sun and two planets
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local b1 = add_player_body(players[1], makevec2d(-4, -4), makevec2d(0, 0))
-	-- 	local b2 = add_player_body(players[2], makevec2d( 4,  4), makevec2d(0, 0))
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
-	-- elseif level == 3 then
-	-- 	-- sun, mercury and two planets
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local mercury = add_planet(makevec2d(0, -2), 0.2, 0.2)
-	-- 	mercury.vel = tangent_vel(mercury, sun)
-	-- 	mercury.sprite = 33
-
-	-- 	local b1 = add_player_body(players[1], makevec2d(-5, -5), makevec2d(0, 0))
-	-- 	local b2 = add_player_body(players[2], makevec2d( 5,  5), makevec2d(0, 0))
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
-	-- elseif level == 4 then
-	-- 	-- two suns
-		
-	-- 	local sun1 = add_sun(makevec2d( 4, 0), 16, 0.8)
-	-- 	local sun2 = add_sun(makevec2d(-4, 0), 16, 0.8)
-
-	-- 	add_player_body(players[1], makevec2d(-1, -1), makevec2d(-2.2, -3.5), 0)
-	-- 	add_player_body(players[2], makevec2d(1, 1), makevec2d(2.2, 3.5), 0)
-	-- elseif level == 5 then
-	-- 	-- sun and moons
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local b1 = add_player_body(players[1], makevec2d( 5, -5), makevec2d(0, 0), 0)
-	-- 	local b2 = add_player_body(players[2], makevec2d(-5,  5), makevec2d(0, 0), 0)
-
-	-- 	local moon1 = add_planet(b1.pos + makevec2d(-1, 0), 0.1, 0.2)
-	-- 	local moon2 = add_planet(b2.pos + makevec2d( 1, 0), 0.1, 0.2)
-
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
-	-- 	moon1.vel = tangent_vel(moon1, b1) + tangent_vel(moon1, sun)
-	-- 	moon2.vel = tangent_vel(moon2, b2) + tangent_vel(moon2, sun)
-	-- 	moon1.sprite = 18
-	-- 	moon2.sprite = 18
-	-- elseif level == 6 then
-	-- 	-- sun, saturn and other planet
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local alien = add_planet(makevec2d(-1.2, -1.2), 1, 0.2)
-	-- 	alien.vel = tangent_vel(alien, sun)
-	-- 	alien.sprite = 2
-
-	-- 	local saturn = add_planet(makevec2d(7, 7), 12, 0.4)
-	-- 	saturn.vel = tangent_vel(saturn, sun)
-	-- 	saturn.sprite = 3
-
-	-- 	local b1 = add_player_body(players[1], makevec2d( 4.5, -4.5), makevec2d(0, 0), 0)
-	-- 	local b2 = add_player_body(players[2], makevec2d(-4.5,  4.5), makevec2d(0, 0), 0)
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
-	-- elseif level == 7 then
-	-- 	-- sun, saturn and other planet
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local comet = add_planet(makevec2d(0, 10), 1, 0.2)
-	-- 	comet.vel = tangent_vel(comet, sun) * 0.5 + makevec2d(-0.5, 0)
-	-- 	comet.sprite = 50
-
-	-- 	local venus = add_planet(makevec2d(0, 1.5), 1.5, 0.2)
-	-- 	venus.vel = tangent_vel(venus, sun)
-	-- 	venus.sprite = 49
-
-	-- 	local b1 = add_player_body(players[1], makevec2d(-5.6, -5.6), makevec2d(0, 0), 0)
-	-- 	local b2 = add_player_body(players[2], makevec2d( 5.6,  5.6), makevec2d(0, 0), 0)
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
-	-- elseif level == 8 then
-	-- 	-- close and far orbit + satellite
-		
-	-- 	local sun = add_sun(makevec2d(0, 0), 16, 0.8)
-
-	-- 	local satellite = add_planet(makevec2d(0, -7), 1, 0.2)
-	-- 	satellite.vel = tangent_vel(satellite, sun)
-	-- 	satellite.sprite = 65
-
-	-- 	local b1 = add_player_body(players[1], makevec2d(0, 2), makevec2d(0, 0), 0)
-	-- 	local b2 = add_player_body(players[2], makevec2d(0, 7.5), makevec2d(0, 0), 0)
-	-- 	b1.vel = tangent_vel(b1, sun)
-	-- 	b2.vel = tangent_vel(b2, sun)
 	-- elseif level == 9 then
 	-- 	-- two suns, two planets, two players
 		
@@ -874,8 +830,8 @@ end
 
 level_dat = {
 
--- level 1
-[1] = {
+-- 1: two planets
+{
 	bodies = {
 
 	{
@@ -888,7 +844,255 @@ level_dat = {
 	},
 
 	}
-}
+},
+
+-- 2: sun and two planets
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {32, 32}
+	},
+	{
+		plr = 2,
+		pos = {96, 96}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	}
+},
+
+-- 3: sun, mercury, and two planets
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {24, 24}
+	},
+	{
+		plr = 2,
+		pos = {104, 104}
+	},
+	{
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},
+		{
+			sprite = 3,
+			mass = 2,
+			radius = 2,
+			pos = {64, 50}
+		},
+	},
+
+	}
+},
+
+-- 4: two suns
+{
+	bodies = {
+
+	{
+		{
+			plr = 1,
+			pos = {32, 40}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {32, 64}
+		},
+	},
+	{
+		{
+			plr = 2,
+			pos = {96, 88}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {96, 64}
+		},
+	},
+
+	}
+},
+
+-- 5: sun and moons
+{
+	bodies = {
+
+	{
+		{
+			plr = 1,
+			pos = {104, 24}
+		},
+		{
+			mass = 0.5,
+			radius = 1.5,
+			pos = {95, 24},
+			sprite = 6
+		},
+	},
+	{
+		{
+			plr = 2,
+			pos = {24, 104}
+		},
+		{
+			mass = 0.5,
+			radius = 1.5,
+			pos = {33, 104},
+			sprite = 6
+		},
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	}
+},
+
+-- 6: sun and saturn
+{
+	bodies = {
+
+	{
+		mass = 8,
+		radius = 3.5,
+		pos = {116, 15},
+		sprite = 32
+	},
+	{
+		{
+			plr = 1,
+			pos = {80, 48}
+		},
+		{
+			plr = 2,
+			pos = {48, 80}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},
+	}
+
+	}
+},
+
+-- 7: venus and comet
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {20, 20}
+	},
+	{
+		plr = 2,
+		pos = {104, 104}
+	},
+	{
+		{
+			mass = 2,
+			radius = 3.5,
+			pos = {64, 76},
+			sprite = 4
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},	
+	},
+	{
+		mass = 0.5,
+		radius = 1,
+		pos = {64, 144},
+		ecc = 0.9,
+		sprite = 16
+	},
+
+	}
+},
+
+-- 8: close and far orbit + satellite
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {64, 80}
+	},
+	{
+		plr = 2,
+		pos = {64, 120}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},	
+	{
+		mass = 0.2,
+		radius = 2,
+		pos = {64, 8},
+		sprite = 17
+	},
+
+	}
+},
+
+-- 9: black hole and two planets
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {20, 20}
+	},
+	{
+		plr = 2,
+		pos = {108, 108}
+	},
+	{
+		type = HOLE,
+		static = true,
+		mass = 32,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	}
+},
 
 }
 
@@ -1060,10 +1264,10 @@ function draw_selection_screen()
 		pal(2, player_colors[plr.id][2])
 
 		local yoff = -18
-		cursor(plr.x - 3, plr.y + yoff - 4)
+		cursor(plr.x - 3, plr.y + yoff - 6)
 		if plr.id != 0 then
 			yoff = 12
-			cursor(plr.x - 3, plr.y + yoff + 7)
+			cursor(plr.x - 3, plr.y + yoff + 9)
 		end
 		spr(60, plr.x - 3, plr.y + yoff, 1, 1, false, plr.id != 0)
 		print("p" .. plr.id + 1)
@@ -1111,6 +1315,16 @@ function draw_sun(x, y)
 	end
 end
 
+function draw_black_hole(x, y, radius, draw_halo)
+	if draw_halo then
+		circfill(x, y, sin(t()) * 2 + radius + 5, 8)
+		circfill(x, y, sin(t()) * 1 + radius + 3.5, 9)
+	end
+
+	circfill(x, y, radius + 2, 0)
+	circ(x, y, radius + 2, 7)
+end
+
 function draw_aiming_arrows(player)
 	local b = player.body
 
@@ -1138,11 +1352,11 @@ function draw_aiming_arrows(player)
 	pal()
 end
 
-local vertical_ob_arrow_x = 80
-local vertical_ob_arrow_y = 24
 local horizontal_ob_arrow_x = 88
 local horizontal_ob_arrow_y = 24
-local diagonal_ob_arrow_x = 96
+local vertical_ob_arrow_x = 96
+local vertical_ob_arrow_y = 24
+local diagonal_ob_arrow_x = 104
 local diagonal_ob_arrow_y = 24
 local ob_blink_freq = 30
 
@@ -1177,21 +1391,21 @@ function draw_out_of_bounds_ui(player)
 	local dist = max(abs(px - player.body.x), abs(py - player.body.y))
 	local max_dist = 128
 	local t = min(dist, max_dist) / max_dist
-	local sz = ceil((1 - t) * 8 + t * 3)
+	local sz = ceil((1 - t) * 4 + t * 2) * 2 - 1
 
 	if player.out_of_bounds_time >= 30 and flr(player.out_of_bounds_time / ob_blink_freq) % 2 == 0 then 
-		pal(12, 10)
-		pal(1, 7)
+		pal(player.fg_color, 7)
+		pal(player.bg_color, 6)
 	else 
-		pal(12, player.fg_color)
-		pal(1, player.bg_color)
+		pal(player.fg_color)
+		pal(player.bg_color)
 	end
 
 	if player.out_of_bounds_time >= 30 and player.out_of_bounds_time % (ob_blink_freq * 2) == 0 then
 		sfx(sounds.out_of_bounds_beep) 
 	end
 
-	sspr(spritex, spritey, 8, 8, px - sz / 2, py - sz / 2, sz, sz, px < 64, py < 64)
+	sspr(spritex, spritey, 7, 7, px - sz / 2, py - sz / 2, sz, sz, px < 64, py < 64)
 	pal()
 end
 
@@ -1276,13 +1490,13 @@ c1011000d00500d01122122100000000000000000000000000000000000000000000000000000000
 0000fff999ff00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0dd999fffff99dd00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 d11ff999999ff11d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-1ddddf999ffdddd10000000000000000000000000000000000000000000000000444444400000000028000000028000000000000000000000000000000000000
-01111dddddd111100000000000000000000000000000000000000000000000004422222200000000002820020028800000000000000000200006600000000000
-0000f111111f00000000000000000000000000000000000000000000000000004220000000000000002882280028880022222220000002800060060000000000
-000099ffff9900000000000000000000000000000000000000000000000000004200000000000000028008800028888088888880000028800606006000000000
-00000099990000000000000000000000000000000000000000000000000000004200022200000000000000000028880008888800000288800600606000000000
-00000000000000000000000000000000000000000000000000000000000000004200224400000000000200000028800000888000002888800060060000000000
-00000000000000000000000000000000000000000000000000000000000000004200444000000000002800000028000000080000028888800006600000000000
+1ddddf999ffdddd10000000000000000000000000000000000000000000000000444444400000000028000002800000022222220000002000000000000000000
+01111dddddd111100000000000000000000000000000000000000000000000004422222200000000002820022880000088888880000028000006600000000000
+0000f111111f00000000000000000000000000000000000000000000000000004220000000000000002882282888000008888800000288000060060000000000
+000099ffff9900000000000000000000000000000000000000000000000000004200000000000000028008802888800000888000002888000606006000000000
+00000099990000000000000000000000000000000000000000000000000000004200022200000000000000002888000000080000028888000600606000000000
+00000000000000000000000000000000000000000000000000000000000000004200224400000000000200002880000000000000288888000060060000000000
+00000000000000000000000000000000000000000000000000000000000000004200444000000000002800002800000000000000000000000006600000000000
 00000000000000000000000000000000000000000000000000000000000000004200420000000000028800000000000000000000000000000000000000000000
 0009999000999990009999900999990000000a9aa900000000000006cccccc10000000000000000000000000000000000000000000006cccccc1000000000000
 0099999009999990099999900999999000099a555550000000001577ccccbcccc30000000000000000000000000000000000000001577ccccbcccc3000000000
@@ -1317,7 +1531,7 @@ d11ff999999ff11d0000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000957711777650000000000000555511100000000000000011111771177765000000000
 00000000000000000000000000000000000000000000000000000000000057677660000000000000000000055000000000000000000056767766000000000000
 __gff__
-0000000200000101010101000000000000000000000101010000000000000000000000000000010100000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0000000000000000010101000000000000000000000101010000000000000000020000000000010100000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __map__
 0000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
