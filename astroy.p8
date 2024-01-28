@@ -4,6 +4,7 @@ __lua__
 -- astroy
 -- by felix and mathias
 
+my_seed = 0
 game_state = "title"
 
 sounds = {
@@ -42,13 +43,13 @@ end
 
 -- called at start by pico-8
 function _init()
-	srand(73)
-
 	poke(0x5f36, 0x40) -- disable print scrolling
-	poke(0x5F5C, 255) -- set btnp to never repeat
+	poke(0x5f5c, 255) -- set btnp to never repeat
 
+	my_seed = rnd(0xffff.ffff)
 	init_selection_screen()
 	init_starfield()
+	srand(my_seed)
 end
 
 function transition_fsm(state)
@@ -185,10 +186,15 @@ function draw_game()
 	for body in all(bodies) do
 		if body.type == PLANET then
 			if fget(body.sprite, 0) then -- fragment sprite flag
+				pal(11, body.col1)
+				pal(12, body.col2)
+				local sprite_x = body.sprite & 0xf
+				local sprite_y = body.sprite \ 0xf
 				local tile = flr(body.rand * 4)
 				local tile_x = tile % 2
 				local tile_y = flr(tile / 2)
-				sspr((body.sprite % 16) * 8 + tile_x * 4, flr(body.sprite / 16) * 8 + tile_y * 4, 4, 4, body.x - 3, body.y - 3)
+				sspr(sprite_x * 8 + tile_x * 4, sprite_y * 8 + tile_y * 4, 4, 4, body.x - 3, body.y - 3)
+				pal()
 			elseif fget(body.sprite, 1) then -- big sprite flag
 				spr(body.sprite, body.x - 6, body.y - 6, 2, 2)
 			else
@@ -374,6 +380,8 @@ function body_create(x, y)
 		ddx = 0, -- acceleration
 		ddy = 0,
 		sprite = 1,
+		col1 = 11, -- primary color (used by fragments)
+		col2 = 12, -- secondary color
 		rand = rnd()
 	}
 
@@ -389,7 +397,38 @@ end
 
 -- add exploding fragments of this body exploding into the "bodies" table
 function body_fragment(body, fragment_count)
-	if fget(body.sprite, 0) then return end
+	if fget(body.sprite, 0) then return end -- body is already a fragment
+
+	-- sample body sprite to get primary and secondary colors used by fragments
+	local col1 = 0
+	local col2 = 0
+	local sprite_x = body.sprite & 0xf
+	local sprite_y = body.sprite \ 0xf
+	if fget(body.sprite, 1) then
+		for x = 4, 11 do
+			local col = sget(sprite_x * 8 + x, sprite_y * 8 + 7)
+			if col != 0 then
+				if col1 == 0 then
+					col1 = col
+				elseif col != col1 then
+					col2 = col
+					break
+				end
+			end
+		end
+	else
+		for x = 0, 7 do
+			local col = sget(sprite_x * 8 + x, sprite_y * 8 + 3)
+			if col != 0 then
+				if col1 == 0 then
+					col1 = col
+				elseif col != col1 then
+					col2 = col
+					break
+				end
+			end
+		end
+	end
 
 	-- each fragment has a nth size and radius
 	local mass = body.mass / (fragment_count * 10)
@@ -413,6 +452,8 @@ function body_fragment(body, fragment_count)
 		frag_body.mass = mass
 		frag_body.radius = radius
 		frag_body.sprite = 8
+		frag_body.col1 = col1
+		frag_body.col2 = col2
 	end
 end
 
@@ -451,13 +492,13 @@ function add_projectile(x, y, dx, dy)
 	return p
 end
 
-function remove_dead_projectiles()
-   for _, body in ipairs(bodies) do
-		if body.type == PROJECTILE and out_of_bounds(proj.pos) then 
-			del(bodies, body)
-		end
-   end
-end
+-- function remove_dead_projectiles()
+--    for _, body in ipairs(bodies) do
+-- 		if body.type == PROJECTILE and out_of_bounds(proj.pos) then 
+-- 			del(bodies, body)
+-- 		end
+--    end
+-- end
 
 local dt = 1 / 60
 function update_bodies()
@@ -1135,13 +1176,13 @@ end
 
 function begin_countdown()
 	menu_countdown = 3
-	menu_last_countdown_time = t()
+	menu_last_countdown_time = time()
 	particle_bubble(64, 96, 10, 2, 7)
 end
 
 function advance_countdown()
 	menu_countdown -= 1
-	menu_last_countdown_time = t()
+	menu_last_countdown_time = time()
 	particle_bubble(64, 96, 10, 2, 7)
 
 	if (menu_countdown == 0) transition_fsm("level")
@@ -1149,7 +1190,7 @@ end
 
 function update_selection_screen()
 	if menu_countdown > 0 then
-		if t() >= menu_last_countdown_time + 1 then
+		if time() >= menu_last_countdown_time + 1 then
 			advance_countdown()
 		end
 
@@ -1175,8 +1216,8 @@ function update_selection_screen()
 		local frame = ui_character_frames[i]
 
 		if not frame.selected then
-			frame.x = 24 * (i - 3) + 64 + 1.75 * cos(0.0643 * t() + i * 0.734)
-			frame.y = 64 + 1.75 * sin(0.0734 * t() + i * 0.462)
+			frame.x = 24 * (i - 3) + 64 + 1.75 * cos(0.0643 * time() + i * 0.734)
+			frame.y = 64 + 1.75 * sin(0.0734 * time() + i * 0.462)
 		end
 	end
 
@@ -1277,7 +1318,7 @@ function draw_selection_screen()
 			circ(plr.x, plr.y, 7, 8)
 		else
 			for s = 0, 0.9, 0.125 do
-				local off = t() * 0.3 + plr.id * 0.1
+				local off = time() * 0.3 + plr.id * 0.1
 				local x0 = plr.x + 7 * cos(s + off)
 				local y0 = plr.y + 7 * sin(s + off)
 				local x1 = plr.x + 7 * cos(s + 0.025 + off)
@@ -1317,8 +1358,8 @@ end
 
 function draw_black_hole(x, y, radius, draw_halo)
 	if draw_halo then
-		circfill(x, y, sin(t()) * 2 + radius + 5, 8)
-		circfill(x, y, sin(t()) * 1 + radius + 3.5, 9)
+		circfill(x, y, sin(time()) * 2 + radius + 5, 8)
+		circfill(x, y, sin(time()) * 1 + radius + 3.5, 9)
 	end
 
 	circfill(x, y, radius + 2, 0)
@@ -1425,6 +1466,7 @@ end
 
 star_particles = {}
 function init_starfield()
+	srand(73)
 	local colors = {1, 6}
 	for i = 1, 100 do
 		local x = flr(rnd(128))
@@ -1466,13 +1508,13 @@ function draw_starfield()
 end
 
 __gfx__
-0000000000000000000000000000000000000000000000000000000000000000003c00cc00990ff900006330000000000000000000a000000000000000000000
-0000000000c7cc0000222800006666000099990000dddd000000000000b22d00dccd03cdffffd99d560000500000000000000000aaaaa0000000000000000000
+000000000000000000000000000000000000000000000000000000000000000000bc00cc00990ff900006330000000000000000000a000000000000000000000
+0000000000c7cc0000222800006666000099990000dddd000000000000b22d00dcbd0bbdffffd99d560000500000000000000000aaaaa0000000000000000000
 007007000bcccbc0088888800d6d6d60099944900ddd12d0000660000bd2d3b00dd00dc0dffddff0d500056000000000000000000aaa00000000000000000000
 000770000bbcbbb0022882200dd666d0094499900212ddd0006765000b333bb000000dd00dd0ddd0dd6000d0000000000007e0000a0a00000000000000000000
 000770000bccbbc0088822800dd6d660044994400dddd1200065670003bbb330c0000000f900fff00000000000000000000e2000000000000000000000000000
-007007000ccccbc0028888800dddd66004444440022dddd0000660000b333330cc00d3c0f9f0d99f0d0000500000000000000000000000000000000000000000
-0000000000c77c000022880000dd6600004444000022220000000000003d2300d3c00dcddffd0dff05500dd60000000000000000000000000000000000000000
+007007000ccccbc0028888800dddd66004444440022dddd0000660000b333330cb00dbc0f9f0d99f0d0000500000000000000000000000000000000000000000
+0000000000c77c000022880000dd6600004444000022220000000000003d2300dbb00dcddffd0dff05500dd60000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000ddd00d00ddd00d0056606500000000000000000000000000000000000000000
 000000000000800000c77c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000000006000d0600cdc7cd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -1533,8 +1575,6 @@ d11ff999999ff11d0000000000000000000000000000000000000000000000000000000000000000
 __gff__
 0000000000000000010101000000000000000000000101010000000000000000020000000000010100000000000000000000000000000101000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-__map__
-0000000000000000000000000000000300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
 4901000012240152301523014230122300f2300c22009220072200622004220032200221002210012100021001210002000020000200002000020000200002000560005600046000360002600016000060000000
 0002000026610296102a6202c6202d6202e6302e6302e6302c6202b620296202862026620236201f6101861015610126100e6100a610086100661005610046100361002610026100261002610026100261002610
