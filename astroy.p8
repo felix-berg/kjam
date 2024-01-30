@@ -523,8 +523,8 @@ end
 
 function asteroid_add(cell_x, cell_y)
 	local a = {
-		x = cell_x * 8 + 4 + (rnd() - 0.5) * 3,
-		y = cell_y * 8 + 4 + (rnd() - 0.5) * 3,
+		x = cell_x * 8 + 4 + (rnd(2) - 1) * 2.5,
+		y = cell_y * 8 + 4 + (rnd(2) - 1) * 2.5,
 		rand = rnd()
 	}
 	local index = cell_y * 16 + cell_x
@@ -735,13 +735,13 @@ function particle_explosion(x, y, radius)
 end
 
 function particle_sun_emit(x, y, dx, dy)
-	for i = 1, 16 do
+	for i = 1, 20 do
 		-- local speed = random_btwn(0.06, 0.2)
-		local speed_scale = rnd(0.5) + 0.1
+		local speed_scale = rnd(0.25) + 0.1
 		local col = rnd(2) + 8
 		local particle = make_particle(PARTICLE_SPARK, col, x, y)
-		particle.dx = dx * speed_scale + random_btwn(-0.2, 0.2)
-		particle.dy = dy * speed_scale + random_btwn(-0.2, 0.2)
+		particle.dx = dx * speed_scale + random_btwn(-0.4, 0.4)
+		particle.dy = dy * speed_scale + random_btwn(-0.4, 0.4)
 		particle.life = rnd(60) + 30
 	end
 end
@@ -779,7 +779,7 @@ end
 -->8
 -- levels
 
-num_levels = 9
+num_levels = 13
 
 function body_data_com(body_dat, use_static_mass)
 	local static_mass = 0
@@ -806,8 +806,8 @@ function body_data_com(body_dat, use_static_mass)
 				comy += bdat.pos[2] * m
 			end
 		else
-			local m, cx, cy, static = body_data_com(bdat)
-			if not static and static then
+			local m, cx, cy, stc = body_data_com(bdat)
+			if not static and stc then
 				static = true
 				static_mass = 0
 				comx = 0
@@ -933,7 +933,9 @@ function init_level(lvl)
 
 	setup_bodies(ldat.bodies, 0, 0)
 
-	setup_asteroid_belt(1)
+	if ldat.belt then
+		setup_asteroid_belt(ldat.belt)
+	end
 
 	-- elseif level == 9 then
 	-- 	-- two suns, two planets, two players
@@ -967,7 +969,7 @@ end
 
 level_dat = {
 
--- 1: two planets
+-- 1: two players in regular orbit
 {
 	bodies = {
 
@@ -983,7 +985,61 @@ level_dat = {
 	}
 },
 
--- 2: sun and two planets
+-- 2: two players in close orbit with few asteroids
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {80, 48}
+	},
+	{
+		plr = 2,
+		pos = {48, 80}
+	},
+
+	},
+
+	belt = 2
+},
+
+-- 3: two players with outer asteroid belt
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {32, 32}
+	},
+	{
+		plr = 2,
+		pos = {96, 96}
+	},
+
+	},
+
+	belt = 1
+},
+
+-- 4: two players in close elliptic orbit
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {60, 64},
+		ecc = -0.65
+	},
+	{
+		plr = 2,
+		pos = {68, 64},
+		ecc = -0.65
+	},
+
+	},
+},
+
+-- 5: sun and two planets
 {
 	bodies = {
 
@@ -1006,17 +1062,42 @@ level_dat = {
 	}
 },
 
--- 3: sun, mercury, and two planets
+-- 6: sun and two planets
 {
 	bodies = {
 
 	{
 		plr = 1,
-		pos = {24, 24}
+		pos = {28, 28}
 	},
 	{
 		plr = 2,
-		pos = {104, 104}
+		pos = {100, 100}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	},
+
+	belt = 3
+},
+
+-- 7: sun, mercury, and two planets
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {24, 104}
+	},
+	{
+		plr = 2,
+		pos = {104, 24}
 	},
 	{
 		{
@@ -1037,7 +1118,7 @@ level_dat = {
 	}
 },
 
--- 4: two suns
+-- 8: two suns
 {
 	bodies = {
 
@@ -1071,7 +1152,7 @@ level_dat = {
 	}
 },
 
--- 5: sun and moons
+-- 9: sun and moons
 {
 	bodies = {
 
@@ -1110,7 +1191,7 @@ level_dat = {
 	}
 },
 
--- 6: sun and saturn
+-- 10: sun and saturn
 {
 	bodies = {
 
@@ -1121,27 +1202,25 @@ level_dat = {
 		sprite = 32
 	},
 	{
-		{
-			plr = 1,
-			pos = {80, 48}
-		},
-		{
-			plr = 2,
-			pos = {48, 80}
-		},
-		{
-			type = SUN,
-			static = true,
-			mass = 16,
-			radius = 6,
-			pos = {64, 64}
-		},
-	}
+		plr = 1,
+		pos = {80, 48}
+	},
+	{
+		plr = 2,
+		pos = {48, 80}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},
 
 	}
 },
 
--- 7: venus and comet
+-- 11: venus and comet
 {
 	bodies = {
 
@@ -1166,7 +1245,7 @@ level_dat = {
 			mass = 16,
 			radius = 6,
 			pos = {64, 64}
-		},	
+		},
 	},
 	{
 		mass = 0.5,
@@ -1179,7 +1258,7 @@ level_dat = {
 	}
 },
 
--- 8: close and far orbit + satellite
+-- 12: close and far orbit + satellite
 {
 	bodies = {
 
@@ -1208,7 +1287,7 @@ level_dat = {
 	}
 },
 
--- 9: black hole and two planets
+-- 13: black hole and two planets
 {
 	bodies = {
 
@@ -1550,9 +1629,9 @@ function draw_winner()
 	assert(winner != nil)
 
 	local star_width = 6
-	
-	local lx = winner.body.x - (winner.wins / 2) * star_width
-	local y = winner.body.y - 7
+
+	local lx = winner.body.x - (winner.wins / 2) * star_width - 0.5
+	local y = winner.body.y - 7.5
 	lx += 1
 	for i = 1, winner.wins do
 		spr(13, lx, y)
