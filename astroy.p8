@@ -187,7 +187,7 @@ function draw_game()
 		local tile = flr(asteroid.rand * 4)
 		local tile_x = tile % 2
 		local tile_y = flr(tile / 2)
-		sspr(64 + tile_x * 4, 8 + tile_y * 4, 4, 4, asteroid.x - 3, asteroid.y - 3)
+		sspr(64 + tile_x * 4, 8 + tile_y * 4, 4, 4, asteroid.x - 1.5, asteroid.y - 1.5)
 	end
 
 	-- draw bodies
@@ -201,15 +201,15 @@ function draw_game()
 				local tile = flr(body.rand * 4)
 				local tile_x = tile % 2
 				local tile_y = flr(tile / 2)
-				sspr(sprite_x * 8 + tile_x * 4, sprite_y * 8 + tile_y * 4, 4, 4, body.x - 3, body.y - 3)
+				sspr(sprite_x * 8 + tile_x * 4, sprite_y * 8 + tile_y * 4, 4, 4, body.x - 1.5, body.y - 1.5)
 				pal()
 			elseif fget(body.sprite, 1) then -- big sprite flag
-				spr(body.sprite, body.x - 6, body.y - 6, 2, 2)
+				spr(body.sprite, body.x - 7.5, body.y - 7.5, 2, 2)
 			else
-				spr(body.sprite, body.x - 3, body.y - 3)
+				spr(body.sprite, body.x - 3.5, body.y - 3.5)
 			end
 		elseif body.type == PROJECTILE then
-			spr(body.sprite, body.x - 3, body.y - 3)
+			spr(body.sprite, body.x - 3.5, body.y - 3.5)
 		elseif body.type == SUN then
 			draw_sun(body.x, body.y)
 		elseif body.type == HOLE then
@@ -508,7 +508,18 @@ end
 --    end
 -- end
 
+asteroid_radius = 1.25
+
 asteroids = {}
+
+function asteroid_get(cell_x, cell_y)
+	if cell_x < 0 or cell_x > 15 or
+		cell_y < 0 or cell_y > 15 then
+		return nil
+	end
+	local index = cell_y * 16 + cell_x
+	return asteroids[index]
+end
 
 function asteroid_add(cell_x, cell_y)
 	local a = {
@@ -573,15 +584,13 @@ function update_bodies()
 		local y2 = (b1.y + b1.radius) \ 8
 		for y = y1, y2 do
 			for x = x1, x2 do
-				local index = y * 16 + x
-				if asteroids[index] then
-					local a = asteroids[index]
-
+				local a = asteroid_get(x, y)
+				if a then
 					local dx = a.x - b1.x
 					local dy = a.y - b1.y
 					local dsq = dx*dx + dy*dy
 					-- check collision
-					if dsq <= (b1.radius + 1) * (b1.radius + 1) then
+					if dsq <= (b1.radius + asteroid_radius) * (b1.radius + asteroid_radius) then
 						add(collisions, { first = b1, second = nil })
 						asteroid_remove(x, y)
 					end
@@ -1470,8 +1479,8 @@ function draw_aiming_arrows(player)
 	pal(8, player.fg_color)
 	pal(2, player.bg_color)
 
-	local arrow_x = b.x + flr(5 * player.aim_x - 0.5)
-	local arrow_y = b.y + flr(5 * player.aim_y - 0.5)
+	local arrow_x = b.x + flr(5 * player.aim_x) - 1.5
+	local arrow_y = b.y + flr(5 * player.aim_y) - 1.5
 
 	sspr(sx, sy, 4, 4,
 		 arrow_x, arrow_y, 4, 4,
