@@ -780,7 +780,7 @@ end
 -->8
 -- levels
 
-num_levels = 16
+num_levels = 20
 
 function body_data_com(body_dat, use_static_mass)
 	local static_mass = 0
@@ -1063,7 +1063,32 @@ level_dat = {
 	}
 },
 
--- 6: sun and two planets with inner asteroid belt
+-- 6: sun with outer asteroid belt
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {32, 32}
+	},
+	{
+		plr = 2,
+		pos = {96, 96}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	},
+
+	belt = 1
+},
+
+-- 7: sun and two planets with inner asteroid belt
 {
 	bodies = {
 
@@ -1088,7 +1113,55 @@ level_dat = {
 	belt = 3
 },
 
--- 7: sun, mercury, and two planets
+-- 8: sun with close orbits
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {86, 74}
+	},
+	{
+		plr = 2,
+		pos = {42, 52}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	}
+
+	},
+},
+
+-- 9: sun with close and far orbit
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {113, 36}
+	},
+	{
+		{
+			plr = 2,
+			pos = {78, 52}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},
+	},
+
+	},
+},
+
+-- 10: sun, mercury, and two planets
 {
 	bodies = {
 
@@ -1119,41 +1192,7 @@ level_dat = {
 	}
 },
 
--- 8: two suns
-{
-	bodies = {
-
-	{
-		{
-			plr = 1,
-			pos = {32, 40}
-		},
-		{
-			type = SUN,
-			static = true,
-			mass = 16,
-			radius = 6,
-			pos = {32, 64}
-		},
-	},
-	{
-		{
-			plr = 2,
-			pos = {96, 88}
-		},
-		{
-			type = SUN,
-			static = true,
-			mass = 16,
-			radius = 6,
-			pos = {96, 64}
-		},
-	},
-
-	}
-},
-
--- 9: sun and moons
+-- 11: sun and moons
 {
 	bodies = {
 
@@ -1192,7 +1231,7 @@ level_dat = {
 	}
 },
 
--- 10: sun and saturn
+-- 12: sun and saturn
 {
 	bodies = {
 
@@ -1221,7 +1260,7 @@ level_dat = {
 	}
 },
 
--- 11: venus and comet
+-- 13: sun, venus and comet
 {
 	bodies = {
 
@@ -1259,7 +1298,7 @@ level_dat = {
 	}
 },
 
--- 12: close and far orbit + satellite
+-- 14: close and far orbit + satellite
 {
 	bodies = {
 
@@ -1288,30 +1327,7 @@ level_dat = {
 	}
 },
 
--- 13: black hole and two planets
-{
-	bodies = {
-
-	{
-		plr = 1,
-		pos = {20, 20}
-	},
-	{
-		plr = 2,
-		pos = {108, 108}
-	},
-	{
-		type = HOLE,
-		static = true,
-		mass = 32,
-		radius = 6,
-		pos = {64, 64}
-	},
-
-	}
-},
-
--- 14: sun with close asteroid belt
+-- 15: sun with close asteroid belt
 {
 	bodies = {
 
@@ -1336,7 +1352,7 @@ level_dat = {
 	belt = 4
 },
 
--- 15: sun with planet inside asteroid belt
+-- 16: sun with planet inside asteroid belt
 {
 	bodies = {
 
@@ -1367,7 +1383,7 @@ level_dat = {
 	belt = 3
 },
 
--- 16: sun with two big planets outside asteroid belt
+-- 17: sun with two big planets outside asteroid belt
 {
 	bodies = {
 
@@ -1404,6 +1420,97 @@ level_dat = {
 	},
 
 	belt = 4
+},
+
+-- 18: sun, big in-between planet
+{
+	bodies = {
+
+	{
+		plr = 2,
+		pos = {64, 12}
+	},
+	{
+		{
+			mass = 4.5,
+			radius = 3,
+			pos = {80, 102},
+			sprite = 20,
+		},
+		{
+			{
+				plr = 1,
+				pos = {80, 64}
+			},
+			{
+				type = SUN,
+				static = true,
+				mass = 16,
+				radius = 6,
+				pos = {64, 64}
+			},
+		},
+	}
+	
+
+	},
+},
+
+-- 19: two suns
+{
+	bodies = {
+
+	{
+		{
+			plr = 1,
+			pos = {32, 40}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {32, 64}
+		},
+	},
+	{
+		{
+			plr = 2,
+			pos = {96, 88}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {96, 64}
+		},
+	},
+
+	}
+},
+
+-- 20: black hole and two planets
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {20, 20}
+	},
+	{
+		plr = 2,
+		pos = {108, 108}
+	},
+	{
+		type = HOLE,
+		static = true,
+		mass = 32,
+		radius = 6,
+		pos = {64, 64}
+	},
+
+	}
 },
 
 }
