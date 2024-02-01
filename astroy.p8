@@ -239,6 +239,7 @@ end
 num_players = 2
 
 player_mass = 4
+player_radius = 2.5
 
 shoot_delay = 0.3
 shoot_strength = 50
@@ -256,7 +257,7 @@ players = {}
 function add_player_body(player, x, y)
 	local body = body_create(x, y)
 	body.mass = player_mass
-	body.radius = 2.5
+	body.radius = player_radius
 	body.type = PLANET
 	body.sprite = player.sprite
 
@@ -779,7 +780,7 @@ end
 -->8
 -- levels
 
-num_levels = 13
+num_levels = 16
 
 function body_data_com(body_dat, use_static_mass)
 	local static_mass = 0
@@ -1308,6 +1309,101 @@ level_dat = {
 	},
 
 	}
+},
+
+-- 14: sun with close asteroid belt
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {48, 48}
+	},
+	{
+		plr = 2,
+		pos = {80, 80}
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 6,
+		pos = {64, 64}
+	}
+
+	},
+
+	belt = 4
+},
+
+-- 15: sun with planet inside asteroid belt
+{
+	bodies = {
+
+	{
+		plr = 1,
+		pos = {118, 52}
+	},
+	{
+		plr = 2,
+		pos = {10, 72}
+	},
+	{
+		radius = 2,
+		mass = 2,
+		pos = {76, 60},
+		sprite = 5,
+	},
+	{
+		type = SUN,
+		static = true,
+		mass = 16,
+		radius = 2,
+		pos = {64, 64}
+	}
+
+	},
+
+	belt = 3
+},
+
+-- 16: sun with two big planets outside asteroid belt
+{
+	bodies = {
+
+	{
+		mass = 8,
+		radius = 3.5,
+		pos = {120, 20},
+		sprite = 32,
+	},
+	{
+		mass = 8,
+		radius = 3.5,
+		pos = {8, 108},
+		sprite = 36,
+	},
+	{
+		{
+			plr = 1,
+			pos = {75, 45}
+		},
+		{
+			plr = 2,
+			pos = {53, 83}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},
+	},
+
+	},
+
+	belt = 4
 },
 
 }
