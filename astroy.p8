@@ -4,8 +4,10 @@ __lua__
 -- astroy
 -- by felix and mathias
 
-my_seed = 0
+level = 0
 game_state = "title"
+
+my_seed = 0
 
 sounds = {
 	projectile = 0,
@@ -62,7 +64,11 @@ function transition_fsm(state)
 			add_player(plr1.id, characters[plr1.selection], 8, 2)
 			add_player(plr2.id, characters[plr2.selection], 12, 1)
 
-			random_level()
+			if level == 0 then
+				random_level()
+			else
+				init_level(level)
+			end
 		end
 	elseif game_state == "level" then
 		if state == "title" then
@@ -782,57 +788,81 @@ end
 
 num_levels = 20
 
-function body_data_com(body_dat, use_static_mass)
+function body_data_init(body_dat)
 	local static_mass = 0
-	local total_mass = 0
-	local comx = 0
-	local comy = 0
-	local static = false
+	body_dat.static = false
+	body_dat.mass = 0
+	body_dat.pos = {0, 0}
 
 	-- compute the center of mass of bodies
 	for bdat in all(body_dat) do
-		if not static and bdat.static then
-			static = true
-			static_mass = 0
-			comx = 0
-			comy = 0
+		if #bdat != 0 then
+			body_data_init(bdat)
 		end
 
-		if #bdat == 0 then
-			if (bdat.static) or (#bdat == 0 and not static) then
-				local m = bdat.mass or (bdat.plr and player_mass or 1)
-				static_mass += m
-				total_mass += m
-				comx += bdat.pos[1] * m
-				comy += bdat.pos[2] * m
-			end
-		else
-			local m, cx, cy, stc = body_data_com(bdat)
-			if not static and stc then
-				static = true
-				static_mass = 0
-				comx = 0
-				comy = 0
-			end
-			static_mass += m
-			total_mass += m
-			comx += cx * m
-			comy += cy * m
+		if not body_dat.static and bdat.static then
+			body_dat.static = true
+			static_mass = 0
+			body_dat.pos[1] = 0
+			body_dat.pos[2] = 0
+		end
+
+		bdat.mass = bdat.mass or (bdat.plr and player_mass or 1)
+		bdat.static = bdat.static or false
+		if body_dat.static == bdat.static then
+			static_mass += bdat.mass
+			body_dat.mass += bdat.mass
+			body_dat.pos[1] += bdat.pos[1] * bdat.mass
+			body_dat.pos[2] += bdat.pos[2] * bdat.mass
 		end
 	end
-	comx /= static_mass
-	comy /= static_mass
+	if body_dat.mass == 0 then
+		return
+	end
 
-	if (use_static_mass) total_mass = static_mass
-	return total_mass, comx, comy, static
+	body_dat.pos[1] /= static_mass
+	body_dat.pos[2] /= static_mass
+end
+
+function body_dat_lin_density(body_dat, ref_bdat)
+	local density = 0
+
+	for bdat in all(body_dat) do
+		if bdat != ref_bdat then
+			local dx = bdat.pos[1] - ref_bdat.pos[1]
+			local dy = bdat.pos[2] - ref_bdat.pos[2]
+			dx = dx >> 0x4
+			dy = dy >> 0x4
+			local dsq = dx*dx + dy*dy
+			density += bdat.mass / dsq
+		end
+	end
+
+	return density
 end
 
 -- create bodies from level body data, and set the initial orbital velocities
 function setup_bodies(body_dat, rel_x, rel_y)
-	local mass, comx, comy, static = body_data_com(body_dat, true)
+	rel_x = rel_x or 0
+	rel_y = rel_y or 0
 
 	-- init bodies
 	for bdat in all(body_dat) do
+
+		local ld = body_dat_lin_density(body_dat, bdat)
+
+		local dx = body_dat.pos[1] - bdat.pos[1]
+		local dy = body_dat.pos[2] - bdat.pos[2]
+		dx = dx >> 0x4
+		dy = dy >> 0x4
+		local dsq = dx*dx + dy*dy
+		local d = sqrt(dsq)
+
+		-- eccentricity
+		local ecc = bdat.ecc or 0
+		-- velocity
+		local vel = 8 * sqrt(gravity_constant * ld * d * (1 - ecc)) -- thankyou kepler
+
 		if #bdat == 0 then
 			local b
 			if bdat.plr then
@@ -848,54 +878,18 @@ function setup_bodies(body_dat, rel_x, rel_y)
 			end
 			b.dx = rel_x
 			b.dy = rel_y
-			if not bdat.static and mass > b.mass then
-				local m = static and mass or mass - b.mass
-
-				local dx = comx - b.x
-				local dy = comy - b.y
-				dx = dx >> 0x4
-				dy = dy >> 0x4
-				local dsq = dx*dx + dy*dy
-				local d = sqrt(dsq)
-
-				-- approximate distance to center of mass of all other bodies (excluding this one)
-				local dc = d * mass / m
-
-				-- eccentricity
-				local ecc = bdat.ecc or 0
-				-- velocity
-				local vel = 8 * sqrt(gravity_constant * m * (d - d * ecc)) / dc -- thankyou kepler
-
+			if not bdat.static and body_dat.mass > bdat.mass then
 				b.dx += -dy / d * vel
 				b.dy +=  dx / d * vel
 			end
 		else
-			local asm_mass, asm_comx, asm_comy, asm_static = body_data_com(bdat)
-			local asm_vx = rel_x
-			local asm_vy = rel_y
-			if not asm_static and mass > asm_mass then
-				local m = static and mass or mass - asm_mass
-
-				local dx = comx - asm_comx
-				local dy = comy - asm_comy
-				dx = dx >> 0x4
-				dy = dy >> 0x4
-				local dsq = dx*dx + dy*dy
-				local d = sqrt(dsq)
-
-				-- approximate distance to center of mass of all other bodies (excluding this one)
-				local dc = d * mass / m
-
-				-- eccentricity
-				local ecc = bdat.ecc or 0
-				-- velocity
-				local vel = 8 * sqrt(gravity_constant * m * (d - d * ecc)) / dc -- thankyou kepler
-
-				asm_vx += -dy / d * vel
-				asm_vy +=  dx / d * vel
-
+			local vx = rel_x
+			local vy = rel_y
+			if not bdat.static and body_dat.mass > bdat.mass then
+				vx += -dy / d * vel
+				vy +=  dx / d * vel
 			end
-			setup_bodies(bdat, asm_vx, asm_vy)
+			setup_bodies(bdat, vx, vy)
 		end
 	end
 end
@@ -921,6 +915,8 @@ function init_level(lvl)
 	local ldat = level_dat[lvl]
 	if (not ldat) return
 
+	level = lvl
+
 	cls()
 	reset()
 
@@ -932,7 +928,8 @@ function init_level(lvl)
 		player.last_shot_t = time() + 1
 	end
 
-	setup_bodies(ldat.bodies, 0, 0)
+	body_data_init(ldat.bodies)
+	setup_bodies(ldat.bodies)
 
 	if ldat.belt then
 		setup_asteroid_belt(ldat.belt)
@@ -1303,25 +1300,27 @@ level_dat = {
 	bodies = {
 
 	{
-		plr = 1,
-		pos = {64, 80}
-	},
-	{
 		plr = 2,
 		pos = {64, 120}
 	},
-	{
-		type = SUN,
-		static = true,
-		mass = 16,
-		radius = 6,
-		pos = {64, 64}
-	},	
 	{
 		mass = 0.2,
 		radius = 2,
 		pos = {64, 8},
 		sprite = 22,
+	},
+	{
+		{
+			plr = 1,
+			pos = {64, 80}
+		},
+		{
+			type = SUN,
+			static = true,
+			mass = 16,
+			radius = 6,
+			pos = {64, 64}
+		},
 	},
 
 	}
